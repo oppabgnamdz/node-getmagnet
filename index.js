@@ -52,8 +52,8 @@ app.get('/torrent', async (req, res) => {
 			});
 
 			const csv = new ObjectsToCsv(mapping);
-			await csv.toDisk('./test.csv');
-			return res.sendFile(path.join(__dirname, 'test.csv'));
+			await csv.toDisk(`./torrent-${date}.csv`);
+			return res.sendFile(path.join(__dirname, `./torrent-${date}.csv`));
 		} catch (e) {
 			console.log({ e });
 			res.status(200).json({ data: 'error' });
@@ -105,8 +105,8 @@ app.get('/jav', async (req, res) => {
 			});
 
 			const csv = new ObjectsToCsv(mapping);
-			await csv.toDisk('./test.csv');
-			return res.sendFile(path.join(__dirname, 'test.csv'));
+			await csv.toDisk(`./jav-${date}.csv`);
+			return res.sendFile(path.join(__dirname, `./jav-${date}.csv`));
 		} catch (e) {
 			console.log({ e });
 			res.status(200).json({ data: 'error' });
