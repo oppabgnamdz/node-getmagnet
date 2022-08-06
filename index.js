@@ -53,6 +53,7 @@ app.get('/torrent', async (req, res) => {
 
 			const csv = new ObjectsToCsv(mapping);
 			await csv.toDisk(`./torrent-${date}.csv`);
+			renderFile(res, date, 'torrent');
 			return res.sendFile(path.join(__dirname, `./torrent-${date}.csv`));
 		} catch (e) {
 			console.log({ e });
@@ -106,6 +107,7 @@ app.get('/jav', async (req, res) => {
 
 			const csv = new ObjectsToCsv(mapping);
 			await csv.toDisk(`./jav-${date}.csv`);
+			renderFile(res, date, 'jav');
 			return res.sendFile(path.join(__dirname, `./jav-${date}.csv`));
 		} catch (e) {
 			console.log({ e });
@@ -116,6 +118,15 @@ app.get('/jav', async (req, res) => {
 		return res.status(200).json({ data: [] });
 	}
 });
+
+const renderFile = (res, date, side) => {
+	res.setHeader(
+		'Content-Disposition',
+		'attachment; filename=' + `${side}-${date}.csv`
+	);
+	res.setHeader('Content-Transfer-Encoding', 'binary');
+	res.setHeader('Content-Type', 'application/octet-stream');
+};
 
 app.listen(process.env.PORT, () =>
 	console.log('Example app listening on port 3000!')
