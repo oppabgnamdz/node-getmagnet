@@ -5,8 +5,10 @@ const rp = require('request-promise');
 const jsdom = require('jsdom');
 var cors = require('cors');
 require('dotenv').config();
+const http = require('http');
 const ObjectsToCsv = require('objects-to-csv');
 const { JSDOM } = jsdom;
+const got = require('got');
 var path = require('path');
 const app = express();
 app.use(cors());
@@ -63,10 +65,14 @@ app.get('/torrent', async (req, res) => {
 });
 
 app.get('/jav', async (req, res) => {
+	// const vgmUrl = 'https://www.141jav.com/date/2022/08/06?page=1';
+	// const test = await got(vgmUrl);
+	// console.log({ test });
 	try {
 		const date = req.query?.date;
 		let start = 0;
-		let end = 200;
+		let end = 30;
+		let base = 'https://www.141jav.com';
 		let host = `https://www.141jav.com/date/${moment(date).format(
 			'YYYY/MM/DD'
 		)}?page=`;
@@ -76,10 +82,9 @@ app.get('/jav', async (req, res) => {
 		try {
 			let data = [];
 			for (let j = parseInt(start); j < parseInt(end); j++) {
-				console.log('asdasd', url(j + 1));
-				const html = await rp(url(j + 1));
+				const html = await got(url(j + 1));
 
-				const dom = new JSDOM(`${html}`);
+				const dom = new JSDOM(`${html.body}`);
 				var arr = [],
 					l = dom.window.document.links;
 
@@ -96,7 +101,7 @@ app.get('/jav', async (req, res) => {
 				data = [...data, ...haveDomain];
 			}
 			const mapping = data.map((item, index) => {
-				return { url: item };
+				return { url: base + item };
 			});
 
 			const csv = new ObjectsToCsv(mapping);
