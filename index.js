@@ -4,6 +4,7 @@ const moment = require('moment');
 const rp = require('request-promise');
 const jsdom = require('jsdom');
 var cors = require('cors');
+require('dotenv').config()
 const { JSDOM } = jsdom;
 const app = express();
 app.use(cors());
@@ -60,4 +61,4 @@ app.get('/csv', async (req, res) => {
 	return res.status(200).json({ data: [] });
 });
 
-app.listen(3000, () => console.log('Example app listening on port 3000!'));
+app.listen(process.env.PORT, () => console.log('Example app listening on port 3000!'));
