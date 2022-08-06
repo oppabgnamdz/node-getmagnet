@@ -38,11 +38,11 @@ app.get('/torrent', async (req, res) => {
 				for (var i = 0; i < l.length; i++) {
 					arr.push(l[i].href);
 				}
-				const breakPage = arr.find((item) => item.includes('/date/'));
+				const breakPage = arr.find((item) => item.includes('/download/'));
 				if (!breakPage) {
 					break;
 				}
-
+				console.log({ breakPage });
 				const needArr = arr.filter((item) => item.includes('/download/'));
 				const haveDomain = needArr.map((item) => item);
 				data = [...data, ...haveDomain];
@@ -72,7 +72,7 @@ app.get('/jav', async (req, res) => {
 	try {
 		const date = req.query?.date;
 		let start = 0;
-		let end = 30;
+		let end = 200;
 		let base = 'https://www.141jav.com';
 		let host = `https://www.141jav.com/date/${moment(date).format(
 			'YYYY/MM/DD'
@@ -92,7 +92,8 @@ app.get('/jav', async (req, res) => {
 				for (var i = 0; i < l.length; i++) {
 					arr.push(l[i].href);
 				}
-				const breakPage = arr.find((item) => item.includes('/date/'));
+				const breakPage = arr.find((item) => item.includes('/download/'));
+				console.log({ breakPage });
 				if (!breakPage) {
 					break;
 				}
