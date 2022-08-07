@@ -64,6 +64,14 @@ app.get('/torrent', async (req, res) => {
 		return res.status(200).json({ data: [] });
 	}
 });
+app.get('/test', async (req, res) => {
+	res
+		.status(200)
+		.json([
+			'https://www.141jav.com/download/DLDSS104.torrent',
+			'https://www.141jav.com/download/YMDS107.torrent',
+		]);
+});
 
 app.get('/jav', async (req, res) => {
 	// const vgmUrl = 'https://www.141jav.com/date/2022/08/06?page=1';
