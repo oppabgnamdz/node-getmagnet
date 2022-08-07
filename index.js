@@ -65,12 +65,51 @@ app.get('/torrent', async (req, res) => {
 	}
 });
 app.get('/test', async (req, res) => {
-	res
-		.status(200)
-		.json([
-			'https://www.141jav.com/download/DLDSS104.torrent',
-			'https://www.141jav.com/download/YMDS107.torrent',
-		]);
+	try {
+		const date = moment('2022-08-06');
+		let start = 0;
+		let end = 200;
+		let base = 'https://www.141jav.com';
+		let host = `https://www.141jav.com/date/${moment(date).format(
+			'YYYY/MM/DD'
+		)}?page=`;
+		const url = (index) => {
+			return `${host}${index}`;
+		};
+		try {
+			let data = [];
+			for (let j = parseInt(start); j < parseInt(end); j++) {
+				const html = await got(url(j + 1));
+
+				const dom = new JSDOM(`${html.body}`);
+				var arr = [],
+					l = dom.window.document.links;
+
+				for (var i = 0; i < l.length; i++) {
+					arr.push(l[i].href);
+				}
+				const breakPage = arr.find((item) => item.includes('/download/'));
+				console.log({ breakPage });
+				if (!breakPage) {
+					break;
+				}
+
+				const needArr = arr.filter((item) => item.includes('/download/'));
+				const haveDomain = needArr.map((item) => item);
+				data = [...data, ...haveDomain];
+			}
+			const mapping = data.map((item, index) => {
+				return base + item;
+			});
+			res.status(200).json(mapping);
+		} catch (e) {
+			console.log({ e });
+			res.status(200).json({ data: 'error' });
+		}
+		return res.status(200).json([]);
+	} catch (e) {
+		return res.status(200).json([]);
+	}
 });
 
 app.get('/jav', async (req, res) => {
