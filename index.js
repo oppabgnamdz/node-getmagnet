@@ -66,7 +66,8 @@ app.get('/torrent', async (req, res) => {
 });
 app.get('/test', async (req, res) => {
 	try {
-		const date = moment().subtract(1, 'd').format('YYYY/MM/DD');
+		const date =
+			req.query?.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
 		let start = 0;
 		let end = 20;
 		let base = 'https://www.141jav.com';
