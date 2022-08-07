@@ -12,9 +12,10 @@ const got = require('got');
 var path = require('path');
 const app = express();
 app.use(cors());
+
 app.get('/', (req, res) => {
 	res.status(200);
-	res.send('Welcome to root URL of Server1');
+	return res.status(200).json([]);
 });
 app.get('/torrent', async (req, res) => {
 	try {
@@ -163,6 +164,9 @@ app.get('/jav', async (req, res) => {
 	} catch (e) {
 		return res.status(200).json({ data: [] });
 	}
+});
+app.get('*', function (req, res) {
+	return res.status(200).json([]);
 });
 
 const renderFile = (res, date, side) => {
