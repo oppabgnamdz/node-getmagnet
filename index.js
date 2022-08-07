@@ -50,18 +50,14 @@ app.get('/torrent', async (req, res) => {
 			const mapping = data.map((item, index) => {
 				return { url: item };
 			});
-
-			const csv = new ObjectsToCsv(mapping);
-			await csv.toDisk(`./torrent-${date}.csv`);
-			renderFile(res, date, 'torrent');
-			return res.sendFile(path.join(__dirname, `./torrent-${date}.csv`));
+			return res.status(200).json(mapping);
 		} catch (e) {
 			console.log({ e });
-			res.status(200).json({ data: 'error' });
+			return res.status(200).json([]);
 		}
-		return res.status(200).json({ data: [] });
+		return res.status(200).json([]);
 	} catch (e) {
-		return res.status(200).json({ data: [] });
+		return res.status(200).json([]);
 	}
 });
 app.get('/test', async (req, res) => {
@@ -77,7 +73,6 @@ app.get('/test', async (req, res) => {
 		const url = (index) => {
 			return `${host}${index}`;
 		};
-		// res.send([]);
 
 		try {
 			let data = [];
@@ -107,7 +102,7 @@ app.get('/test', async (req, res) => {
 			}
 		} catch (e) {
 			console.log({ e });
-			res.status(200).json({ data: 'error' });
+			return res.status(200).json([]);
 		}
 		return res.status(200).json([]);
 	} catch (e) {
