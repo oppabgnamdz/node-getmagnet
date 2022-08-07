@@ -49,8 +49,9 @@ app.get('/torrent', async (req, res) => {
 				data = [...data, ...haveDomain];
 			}
 			const mapping = data.map((item, index) => {
-				return { url: item };
+				return item;
 			});
+			console.log({ mapping });
 			return res.status(200).json(mapping);
 		} catch (e) {
 			console.log({ e });
