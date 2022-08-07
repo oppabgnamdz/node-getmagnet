@@ -66,9 +66,9 @@ app.get('/torrent', async (req, res) => {
 });
 app.get('/test', async (req, res) => {
 	try {
-		const date = moment('2022-08-06');
+		const date = moment().subtract(1, 'd').format('YYYY/MM/DD');
 		let start = 0;
-		let end = 200;
+		let end = 20;
 		let base = 'https://www.141jav.com';
 		let host = `https://www.141jav.com/date/${moment(date).format(
 			'YYYY/MM/DD'
@@ -76,6 +76,8 @@ app.get('/test', async (req, res) => {
 		const url = (index) => {
 			return `${host}${index}`;
 		};
+		// res.send([]);
+
 		try {
 			let data = [];
 			for (let j = parseInt(start); j < parseInt(end); j++) {
@@ -91,6 +93,10 @@ app.get('/test', async (req, res) => {
 				const breakPage = arr.find((item) => item.includes('/download/'));
 				console.log({ breakPage });
 				if (!breakPage) {
+					const mapping = data.map((item, index) => {
+						return base + item;
+					});
+					return res.send(mapping);
 					break;
 				}
 
@@ -98,10 +104,6 @@ app.get('/test', async (req, res) => {
 				const haveDomain = needArr.map((item) => item);
 				data = [...data, ...haveDomain];
 			}
-			const mapping = data.map((item, index) => {
-				return base + item;
-			});
-			res.status(200).json(mapping);
 		} catch (e) {
 			console.log({ e });
 			res.status(200).json({ data: 'error' });
