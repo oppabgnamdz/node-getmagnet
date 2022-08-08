@@ -3,6 +3,7 @@ const express = require('express');
 const moment = require('moment');
 const rp = require('request-promise');
 const jsdom = require('jsdom');
+const request = require('supertest');
 var cors = require('cors');
 require('dotenv').config();
 const http = require('http');
@@ -164,6 +165,22 @@ app.get('/jav', async (req, res) => {
 		return res.status(200).json({ data: [] });
 	} catch (e) {
 		return res.status(200).json({ data: [] });
+	}
+});
+app.get('/special', async (req, res) => {
+	try {
+		const minusDate = req.query?.date.split(',')[0];
+		const side = req.query?.date.split(',')[1];
+		console.log('🚀 ~ file: index.js ~ line 174 ~ app.get ~ side', side);
+		const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
+		const client = request(req.app);
+		let torrents;
+		side === 'j'
+			? (torrents = await client.get(`/test?date=${date}`))
+			: (torrents = await client.get(`/torrent?date=${date}`));
+		return res.status(200).json(JSON.parse(torrents.text));
+	} catch (e) {
+		return res.status(200).json([]);
 	}
 });
 app.get('*', function (req, res) {
