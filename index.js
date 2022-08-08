@@ -169,10 +169,15 @@ app.get('/jav', async (req, res) => {
 });
 app.get('/special', async (req, res) => {
 	try {
-		const minusDate = req.query?.date.split(',')[0];
+		const minusDate = parseInt(req.query?.date.split(',')[0]);
+		if (isNaN(minusDate)) {
+			return res.status(200).json([]);
+		}
+		console.log({ minusDate });
 		const side = req.query?.date.split(',')[1];
 		console.log('🚀 ~ file: index.js ~ line 174 ~ app.get ~ side', side);
 		const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
+		console.log({ date });
 		const client = request(req.app);
 		let torrents;
 		side === 'j'
