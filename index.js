@@ -20,7 +20,7 @@ app.get('/', (req, res) => {
 });
 app.get('/torrent', async (req, res) => {
 	try {
-		const date = req.query?.date;
+		const date = req.query?.date.slice(0, -1);
 		let start = 0;
 		let end = 200;
 		let host = `https://jav-torrent.org/date/${moment(date).format(
