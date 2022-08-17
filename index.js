@@ -113,6 +113,56 @@ app.get('/test', async (req, res) => {
 	}
 });
 
+app.get('/ppv', async (req, res) => {
+	try {
+		const date =
+			req.query?.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
+		let start = 0;
+		let end = 20;
+		let base = 'https://www.141ppv.com';
+		let host = `https://www.141ppv.com/date/${moment(date).format(
+			'YYYY/MM/DD'
+		)}?page=`;
+		const url = (index) => {
+			return `${host}${index}`;
+		};
+
+		try {
+			let data = [];
+			for (let j = parseInt(start); j < parseInt(end); j++) {
+				const html = await got(url(j + 1));
+
+				const dom = new JSDOM(`${html.body}`);
+				var arr = [],
+					l = dom.window.document.links;
+
+				for (var i = 0; i < l.length; i++) {
+					arr.push(l[i].href);
+				}
+				const breakPage = arr.find((item) => item.includes('/download/'));
+				console.log({ breakPage });
+				if (!breakPage) {
+					const mapping = data.map((item, index) => {
+						return base + item;
+					});
+					return res.send(mapping);
+					break;
+				}
+
+				const needArr = arr.filter((item) => item.includes('/download/'));
+				const haveDomain = needArr.map((item) => item);
+				data = [...data, ...haveDomain];
+			}
+		} catch (e) {
+			console.log({ e });
+			return res.status(200).json([]);
+		}
+		return res.status(200).json([]);
+	} catch (e) {
+		return res.status(200).json([]);
+	}
+});
+
 app.get('/jav', async (req, res) => {
 	// const vgmUrl = 'https://www.141jav.com/date/2022/08/06?page=1';
 	// const test = await got(vgmUrl);
@@ -180,9 +230,21 @@ app.get('/special', async (req, res) => {
 		console.log({ date });
 		const client = request(req.app);
 		let torrents;
-		side === 'j'
-			? (torrents = await client.get(`/test?date=${date}`))
-			: (torrents = await client.get(`/torrent?date=${date}`));
+		switch (side) {
+			case 'j':
+				torrents = await client.get(`/test?date=${date}`);
+				break;
+			case 'f':
+				torrents = await client.get(`/ppv?date=${date}`);
+				break;
+
+			default:
+				torrents = await client.get(`/torrent?date=${date}`);
+				break;
+		}
+		// side === 'j'
+		// 	? (torrents = await client.get(`/test?date=${date}`))
+		// 	: (torrents = await client.get(`/torrent?date=${date}`));
 		return res.status(200).json(JSON.parse(torrents.text));
 	} catch (e) {
 		return res.status(200).json([]);
