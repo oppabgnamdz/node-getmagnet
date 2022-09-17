@@ -21,6 +21,7 @@ app.get('/', (req, res) => {
 app.get('/torrent', async (req, res) => {
 	try {
 		const date = req.query?.date.slice(0, -1);
+		const page = req.query?.page === 'undefined' ? null : req.query?.page;
 		let start = 0;
 		let end = 200;
 		let host = `https://jav-torrent.org/date/${moment(date).format(
@@ -29,6 +30,10 @@ app.get('/torrent', async (req, res) => {
 		const url = (index) => {
 			return `${host}${index}`;
 		};
+		if (page) {
+			start = parseInt(page) - 1;
+			end = parseInt(page);
+		}
 		try {
 			let data = [];
 			for (let j = parseInt(start); j < parseInt(end); j++) {
@@ -52,6 +57,9 @@ app.get('/torrent', async (req, res) => {
 			const mapping = data.map((item, index) => {
 				return item;
 			});
+			if (page) {
+				return res.send(mapping);
+			}
 			console.log({ mapping });
 			return res.status(200).json(mapping);
 		} catch (e) {
@@ -67,8 +75,9 @@ app.get('/test', async (req, res) => {
 	try {
 		const date =
 			req.query?.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
+		const page = req.query?.page === 'undefined' ? null : req.query?.page;
 		let start = 0;
-		let end = 20;
+		let end = 200;
 		let base = 'https://www.141jav.com';
 		let host = `https://www.141jav.com/date/${moment(date).format(
 			'YYYY/MM/DD'
@@ -76,7 +85,74 @@ app.get('/test', async (req, res) => {
 		const url = (index) => {
 			return `${host}${index}`;
 		};
+		if (page) {
+			start = parseInt(page) - 1;
+			end = parseInt(page);
+		}
+		try {
+			let data = [];
+			for (let j = parseInt(start); j < parseInt(end); j++) {
+				const html = await got(url(j + 1));
 
+				const dom = new JSDOM(`${html.body}`);
+				var arr = [],
+					l = dom.window.document.links;
+
+				for (var i = 0; i < l.length; i++) {
+					arr.push(l[i].href);
+				}
+				const breakPage = arr.find((item) => item.includes('/download/'));
+
+				if (!breakPage) {
+					const mapping = data.map((item, index) => {
+						return base + item;
+					});
+
+					return res.send(mapping);
+					break;
+				}
+
+				const needArr = arr.filter((item) => item.includes('/download/'));
+				const haveDomain = needArr.map((item) => item);
+				data = [...data, ...haveDomain];
+			}
+			if (page) {
+				console.log({ data });
+				const mapping = data.map((item, index) => {
+					return base + item;
+				});
+				return res.send(mapping);
+			}
+		} catch (e) {
+			console.log({ e });
+			return res.status(200).json([]);
+		}
+
+		return res.status(200).json([]);
+	} catch (e) {
+		return res.status(200).json([]);
+	}
+});
+
+app.get('/ppv', async (req, res) => {
+	try {
+		const date =
+			req.query?.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
+		const page = req.query?.page === 'undefined' ? null : req.query?.page;
+
+		let start = 0;
+		let end = 200;
+		let base = 'https://www.141ppv.com';
+		let host = `https://www.141ppv.com/date/${moment(date).format(
+			'YYYY/MM/DD'
+		)}?page=`;
+		const url = (index) => {
+			return `${host}${index}`;
+		};
+		if (page) {
+			start = parseInt(page) - 1;
+			end = parseInt(page);
+		}
 		try {
 			let data = [];
 			for (let j = parseInt(start); j < parseInt(end); j++) {
@@ -103,55 +179,12 @@ app.get('/test', async (req, res) => {
 				const haveDomain = needArr.map((item) => item);
 				data = [...data, ...haveDomain];
 			}
-		} catch (e) {
-			console.log({ e });
-			return res.status(200).json([]);
-		}
-		return res.status(200).json([]);
-	} catch (e) {
-		return res.status(200).json([]);
-	}
-});
-
-app.get('/ppv', async (req, res) => {
-	try {
-		const date =
-			req.query?.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
-		let start = 0;
-		let end = 20;
-		let base = 'https://www.141ppv.com';
-		let host = `https://www.141ppv.com/date/${moment(date).format(
-			'YYYY/MM/DD'
-		)}?page=`;
-		const url = (index) => {
-			return `${host}${index}`;
-		};
-
-		try {
-			let data = [];
-			for (let j = parseInt(start); j < parseInt(end); j++) {
-				const html = await got(url(j + 1));
-
-				const dom = new JSDOM(`${html.body}`);
-				var arr = [],
-					l = dom.window.document.links;
-
-				for (var i = 0; i < l.length; i++) {
-					arr.push(l[i].href);
-				}
-				const breakPage = arr.find((item) => item.includes('/download/'));
-				console.log({ breakPage });
-				if (!breakPage) {
-					const mapping = data.map((item, index) => {
-						return base + item;
-					});
-					return res.send(mapping);
-					break;
-				}
-
-				const needArr = arr.filter((item) => item.includes('/download/'));
-				const haveDomain = needArr.map((item) => item);
-				data = [...data, ...haveDomain];
+			if (page) {
+				console.log({ data });
+				const mapping = data.map((item, index) => {
+					return base + item;
+				});
+				return res.send(mapping);
 			}
 		} catch (e) {
 			console.log({ e });
@@ -225,21 +258,22 @@ app.get('/special', async (req, res) => {
 		}
 		console.log({ minusDate });
 		const side = req.query?.date.split(',')[1];
-		console.log('🚀 ~ file: index.js ~ line 174 ~ app.get ~ side', side);
+		const page = req.query?.date.split(',')[2];
+		console.log('🚀 ~ file: index.js ~ line 174 ~ app.get ~ side', page);
 		const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
 		console.log({ date });
 		const client = request(req.app);
 		let torrents;
 		switch (side) {
 			case 'j':
-				torrents = await client.get(`/test?date=${date}`);
+				torrents = await client.get(`/test?date=${date}&page=${page}`);
 				break;
 			case 'f':
-				torrents = await client.get(`/ppv?date=${date}`);
+				torrents = await client.get(`/ppv?date=${date}&page=${page}`);
 				break;
 
 			default:
-				torrents = await client.get(`/torrent?date=${date}`);
+				torrents = await client.get(`/torrent?date=${date}&page=${page}`);
 				break;
 		}
 		// side === 'j'
