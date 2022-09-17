@@ -20,7 +20,10 @@ app.get('/', (req, res) => {
 });
 app.get('/torrent', async (req, res) => {
 	try {
-		const date = req.query?.date.slice(0, -1);
+		const date =
+			req.query?.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
+
+		console.log('???', date);
 		const page = req.query?.page === 'undefined' ? null : req.query?.page;
 		let start = 0;
 		let end = 200;
@@ -38,6 +41,7 @@ app.get('/torrent', async (req, res) => {
 			let data = [];
 			for (let j = parseInt(start); j < parseInt(end); j++) {
 				const html = await rp(url(j + 1));
+				console.log('aasdasd', url(j + 1));
 				const dom = new JSDOM(`${html}`);
 				var arr = [],
 					l = dom.window.document.links;
@@ -280,6 +284,40 @@ app.get('/special', async (req, res) => {
 		// 	? (torrents = await client.get(`/test?date=${date}`))
 		// 	: (torrents = await client.get(`/torrent?date=${date}`));
 		return res.status(200).json(JSON.parse(torrents.text));
+	} catch (e) {
+		return res.status(200).json([]);
+	}
+});
+
+app.get('/total', async (req, res) => {
+	try {
+		let arrPageThreeDays = [];
+		for (let minusDate = 0; minusDate < 3; minusDate++) {
+			console.log({ minusDate });
+
+			const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
+			console.log({ date });
+			const client = request(req.app);
+			let [torrentsJ, torrentP] = await Promise.all([
+				client.get(`/test?date=${date}`),
+				client.get(`/ppv?date=${date}`),
+				// client.get(`/torrent?date=${date}`),
+			]);
+
+			console.log('vcl', JSON.parse(torrentsJ.text).length);
+			// arrPageThreeDays.push({
+			// 	[`today${minusDate}`]: {
+			// 		torrentsJ: JSON.parse(torrentsJ.text).length,
+			// 		torrentP: JSON.parse(torrentP.text).length,
+			// 		// torrentT: JSON.parse(torrentT.text).length,
+			// 	},
+			// });
+			arrPageThreeDays.push(JSON.parse(torrentsJ.text).length);
+			arrPageThreeDays.push(JSON.parse(torrentP.text).length);
+			// arrPageThreeDays.push(JSON.parse(torrentT.text).length);
+		}
+
+		return res.status(200).json(arrPageThreeDays);
 	} catch (e) {
 		return res.status(200).json([]);
 	}
