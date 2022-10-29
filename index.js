@@ -21,10 +21,10 @@ app.get('/', (req, res) => {
 app.get('/torrent', async (req, res) => {
 	try {
 		const date =
-			req.query?.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
+			req.query.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
 
 		console.log('???', date);
-		const page = req.query?.page === 'undefined' ? null : req.query?.page;
+		const page = req.query.page === 'undefined' ? null : req.query.page;
 		let start = 0;
 		let end = 200;
 		let host = `https://jav-torrent.org/date/${moment(date).format(
@@ -78,8 +78,8 @@ app.get('/torrent', async (req, res) => {
 app.get('/test', async (req, res) => {
 	try {
 		const date =
-			req.query?.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
-		const page = req.query?.page === 'undefined' ? null : req.query?.page;
+			req.query.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
+		const page = req.query.page === 'undefined' ? null : req.query.page;
 		let start = 0;
 		let end = 200;
 		let base = 'https://www.141jav.com';
@@ -141,8 +141,8 @@ app.get('/test', async (req, res) => {
 app.get('/ppv', async (req, res) => {
 	try {
 		const date =
-			req.query?.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
-		const page = req.query?.page === 'undefined' ? null : req.query?.page;
+			req.query.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
+		const page = req.query.page === 'undefined' ? null : req.query.page;
 
 		let start = 0;
 		let end = 200;
@@ -205,7 +205,7 @@ app.get('/jav', async (req, res) => {
 	// const test = await got(vgmUrl);
 	// console.log({ test });
 	try {
-		const date = req.query?.date;
+		const date = req.query.date;
 		let start = 0;
 		let end = 200;
 		let base = 'https://www.141jav.com';
@@ -256,13 +256,13 @@ app.get('/jav', async (req, res) => {
 });
 app.get('/special', async (req, res) => {
 	try {
-		const minusDate = parseInt(req.query?.date.split(',')[0]);
+		const minusDate = parseInt(req.query.date.split(',')[0]);
 		if (isNaN(minusDate)) {
 			return res.status(200).json([]);
 		}
 		console.log({ minusDate });
-		const side = req.query?.date.split(',')[1];
-		const page = req.query?.date.split(',')[2];
+		const side = req.query.date.split(',')[1];
+		const page = req.query.date.split(',')[2];
 		console.log('🚀 ~ file: index.js ~ line 174 ~ app.get ~ side', page);
 		const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
 		console.log({ date });
