@@ -8,7 +8,7 @@ COPY . /app
 RUN npm install
 
 # Thiết lập môi trường cho ứng dụng
-ENV PORT=4000
+ENV PORT=3000
 
 # Mở cổng để truy cập ứng dụng
 EXPOSE $PORT
