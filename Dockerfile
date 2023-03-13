@@ -1,10 +1,10 @@
-FROM node:14.17-alpine
+FROM node:latest
 
 WORKDIR /app
 
 COPY package*.json ./
 
-RUN npm install --production
+RUN npm install
 
 COPY . .
 
