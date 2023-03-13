@@ -1,17 +1,13 @@
-FROM node:14
+FROM node:14.17-alpine
 
-# Sao chép các tệp tin của ứng dụng vào container
 WORKDIR /app
-COPY . /app
 
-# Cài đặt các phụ thuộc cần thiết
-RUN npm install
+COPY package*.json ./
 
-# Thiết lập môi trường cho ứng dụng
-ENV PORT=3000
+RUN npm install --production
 
-# Mở cổng để truy cập ứng dụng
-EXPOSE $PORT
+COPY . .
 
-# Chạy ứng dụng
-CMD ["node", "index.js"]
+EXPOSE 3000
+
+CMD ["npm", "start"]
