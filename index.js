@@ -35,8 +35,14 @@ app.get('/', async (req, res) => {
 	);
 	const html = response.data;
 	const $ = cheerio.load(html);
-	const streamtapeLink = $('a[href*="streamtape.com"]').text();
-	return res.status(200).json(streamtapeLink);
+	const streamtapeLinks = $('a[href*="streamtape.com"]');
+	const arrLink = [];
+	streamtapeLinks.each((index, link) => {
+		const href = $(link).attr('href');
+		console.log(href);
+		arrLink.push(href);
+	});
+	return res.status(200).json(arrLink);
 });
 app.get('/torrent', async (req, res) => {
 	try {
