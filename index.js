@@ -218,6 +218,45 @@ app.get('/upload', async (req, res) => {
 	return res.status(200).json({ data: response.data });
 });
 
+app.get('/render-direct', async (req, res) => {
+	try {
+		// example adn-185
+		const name = req.query?.name;
+		if (!name) return res.status(200).json([]);
+
+		// get list folder and file
+
+		const folderAndFile = await axios.get(
+			`https://api.streamtape.com/file/listfolder?login=${process.env.LOGIN}&key=${process.env.PASS}`
+		);
+		console.log('hola', folderAndFile.data);
+		const findFile = folderAndFile.data.result.files.find((item) => {
+			const nameItemLower = item.name.toLowerCase();
+			const nameSearchLower = name.toLowerCase();
+			return nameItemLower.includes(nameSearchLower);
+		});
+		console.log({ findFile });
+		const id = findFile?.linkid;
+		if (!id) return res.status(200).json([]);
+
+		// create ticket
+		const response = await axios.get(
+			`https://api.streamtape.com/file/dlticket?file=${id}&login=${process.env.LOGIN}&key=${process.env.PASS}`
+		);
+		console.log('response create ticket', response.data);
+		let ticket = response.data.result.ticket;
+		console.log({ ticket });
+		await wait(5000);
+		const createStream = await axios.get(
+			`https://api.streamtape.com/file/dl?file=${id}&ticket=${ticket}`
+		);
+		console.log('response create stream', createStream.data);
+		return res.status(200).json([createStream.data.result.url]);
+	} catch (e) {
+		console.log({ e });
+	}
+});
+
 app.get('/ppv', async (req, res) => {
 	try {
 		const date =
