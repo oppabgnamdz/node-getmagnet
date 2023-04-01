@@ -44,6 +44,51 @@ app.get('/', async (req, res) => {
 	});
 	return res.status(200).json(arrLink);
 });
+
+const requestTape = async (name) => {
+	const data = new URLSearchParams();
+	let arrayVideo = [];
+	data.append('filename', name);
+	data.append('server', '1000000');
+	data.append('submit', 'GET+THE+VIDEO+LINK+-+CLICK+HERE');
+	const response = await axios.post(
+		'https://javpark.net/embed/watch.php',
+		data,
+		{
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded',
+			},
+		}
+	);
+	const html = response.data;
+	const $ = cheerio.load(html);
+	const streamtapeLinks = $('a[href*="streamtape.com"]');
+
+	streamtapeLinks.each((index, link) => {
+		const href = $(link).attr('href');
+		arrayVideo.push(href);
+	});
+	return arrayVideo;
+};
+
+app.get('/tape', async (req, res) => {
+	const { name, min, max } = req.query;
+
+	let arrayPromise = [];
+	let arrayVideo = [];
+	//`${name}-${index.toString().padStart(3, '0')}.mp4`
+	for (let index = min; index <= max; index++) {
+		arrayPromise.push(
+			requestTape(`${name}-${index.toString().padStart(3, '0')}.mp4`)
+		);
+	}
+	const promiseAll = await Promise.all(arrayPromise);
+	console.log(
+		'test',
+		promiseAll.flatMap((item) => item)
+	);
+	return res.status(200).json(arrayVideo);
+});
 app.get('/torrent', async (req, res) => {
 	try {
 		const date =
@@ -162,6 +207,15 @@ app.get('/test', async (req, res) => {
 	} catch (e) {
 		return res.status(200).json([]);
 	}
+});
+app.get('/upload', async (req, res) => {
+	const url = req.query.url;
+	console.log({ url });
+	const response = await axios.get(
+		`https://api.streamtape.com/remotedl/add?login=fe3cd1a2d01410461720&key=x2qrgW0l4Ztk6VO&url=${url}`
+	);
+	console.log('data', response.data);
+	return res.status(200).json({ data: response.data });
 });
 
 app.get('/ppv', async (req, res) => {
