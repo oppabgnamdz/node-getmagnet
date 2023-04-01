@@ -3,6 +3,8 @@ const express = require('express');
 const moment = require('moment');
 const rp = require('request-promise');
 const jsdom = require('jsdom');
+
+const requestUrl = require('request');
 const request = require('supertest');
 var cors = require('cors');
 const axios = require('axios');
@@ -70,6 +72,43 @@ const requestTape = async (name) => {
 	});
 	return arrayVideo;
 };
+
+function getMovieCode(url) {
+	const baseUrl = 'https://javpark.net/';
+	if (!url.startsWith(baseUrl)) {
+		return null;
+	}
+	const path = url.substring(baseUrl.length);
+	const parts = path.split('-');
+	if (parts.length < 2) {
+		return null;
+	}
+	const code = `${parts[0]}-${parts[1]}`;
+	return code;
+}
+
+app.get('/park', async (req, res) => {
+	const page = req.query.page;
+	if (!page) return res.status(200).json([]);
+	requestUrl(
+		`https://javpark.net/page/${page}/`,
+		async (error, response, body) => {
+			if (error) {
+				console.log(error);
+				return res.status(200).json([]);
+			}
+			const $ = cheerio.load(body);
+			const bookmarkLinks = [];
+			$('a[rel="bookmark"]').each((index, element) => {
+				const href = $(element).attr('href');
+				bookmarkLinks.push(requestTape(getMovieCode(href)));
+			});
+			const promiseAll = await Promise.all(bookmarkLinks);
+
+			return res.status(200).json(promiseAll.flatMap((item) => item));
+		}
+	);
+});
 
 app.get('/tape', async (req, res) => {
 	const { name, min, max } = req.query;
@@ -217,13 +256,11 @@ app.get('/upload', async (req, res) => {
 	console.log('data', response.data);
 	return res.status(200).json({ data: response.data });
 });
-
 function wait(ms) {
 	return new Promise((resolve) => {
 		setTimeout(resolve, ms);
 	});
 }
-
 app.get('/render-direct', async (req, res) => {
 	try {
 		// example adn-185
