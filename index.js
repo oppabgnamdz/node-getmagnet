@@ -87,7 +87,7 @@ app.get('/tape', async (req, res) => {
 		'test',
 		promiseAll.flatMap((item) => item)
 	);
-	return res.status(200).json(arrayVideo);
+	return res.status(200).json(promiseAll.flatMap((item) => item));
 });
 app.get('/torrent', async (req, res) => {
 	try {
