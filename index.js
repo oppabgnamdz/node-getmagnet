@@ -218,6 +218,12 @@ app.get('/upload', async (req, res) => {
 	return res.status(200).json({ data: response.data });
 });
 
+function wait(ms) {
+	return new Promise((resolve) => {
+		setTimeout(resolve, ms);
+	});
+}
+
 app.get('/render-direct', async (req, res) => {
 	try {
 		// example adn-185
