@@ -19,58 +19,65 @@ const app = express();
 app.use(cors());
 
 app.get('/', async (req, res) => {
-	console.log('gahaha');
-	const name = req.query.name;
+	try {
+		const name = req.query.name;
 
-	const data = new URLSearchParams();
-	data.append('filename', `${name}.mp4`);
-	data.append('server', '1000000');
-	data.append('submit', 'GET+THE+VIDEO+LINK+-+CLICK+HERE');
-	const response = await axios.post(
-		'https://javpark.net/embed/watch.php',
-		data,
-		{
-			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded',
-			},
-		}
-	);
-	const html = response.data;
-	const $ = cheerio.load(html);
-	const streamtapeLinks = $('a[href*="streamtape.com"]');
-	const arrLink = [];
-	streamtapeLinks.each((index, link) => {
-		const href = $(link).attr('href');
-		console.log(href);
-		arrLink.push(href);
-	});
-	return res.status(200).json(arrLink);
+		const data = new URLSearchParams();
+		data.append('filename', `${name}.mp4`);
+		data.append('server', '1000000');
+		data.append('submit', 'GET+THE+VIDEO+LINK+-+CLICK+HERE');
+		const response = await axios.post(
+			'https://javpark.net/embed/watch.php',
+			data,
+			{
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+			}
+		);
+		const html = response.data;
+		const $ = cheerio.load(html);
+		const streamtapeLinks = $('a[href*="streamtape.com"]');
+		const arrLink = [];
+		streamtapeLinks.each((index, link) => {
+			const href = $(link).attr('href');
+			console.log(href);
+			arrLink.push(href);
+		});
+		return res.status(200).json(arrLink);
+	} catch (e) {
+		return res.status(200).json();
+	}
 });
 
 const requestTape = async (name) => {
-	const data = new URLSearchParams();
-	let arrayVideo = [];
-	data.append('filename', name);
-	data.append('server', '1000000');
-	data.append('submit', 'GET+THE+VIDEO+LINK+-+CLICK+HERE');
-	const response = await axios.post(
-		'https://javpark.net/embed/watch.php',
-		data,
-		{
-			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded',
-			},
-		}
-	);
-	const html = response.data;
-	const $ = cheerio.load(html);
-	const streamtapeLinks = $('a[href*="streamtape.com"]');
+	try {
+		const data = new URLSearchParams();
+		let arrayVideo = [];
+		data.append('filename', name);
+		data.append('server', '1000000');
+		data.append('submit', 'GET+THE+VIDEO+LINK+-+CLICK+HERE');
+		const response = await axios.post(
+			'https://javpark.net/embed/watch.php',
+			data,
+			{
+				headers: {
+					'Content-Type': 'application/x-www-form-urlencoded',
+				},
+			}
+		);
+		const html = response.data;
+		const $ = cheerio.load(html);
+		const streamtapeLinks = $('a[href*="streamtape.com"]');
 
-	streamtapeLinks.each((index, link) => {
-		const href = $(link).attr('href');
-		arrayVideo.push(href);
-	});
-	return arrayVideo;
+		streamtapeLinks.each((index, link) => {
+			const href = $(link).attr('href');
+			arrayVideo.push(href);
+		});
+		return arrayVideo;
+	} catch (e) {
+		return res.status(200).json([]);
+	}
 };
 
 function getMovieCode(url) {
@@ -88,45 +95,53 @@ function getMovieCode(url) {
 }
 
 app.get('/park', async (req, res) => {
-	const page = req.query.page;
-	if (!page) return res.status(200).json([]);
-	requestUrl(
-		`https://javpark.net/page/${page}/`,
-		async (error, response, body) => {
-			if (error) {
-				console.log(error);
-				return res.status(200).json([]);
-			}
-			const $ = cheerio.load(body);
-			const bookmarkLinks = [];
-			$('a[rel="bookmark"]').each((index, element) => {
-				const href = $(element).attr('href');
-				bookmarkLinks.push(requestTape(getMovieCode(href)));
-			});
-			const promiseAll = await Promise.all(bookmarkLinks);
+	try {
+		const page = req.query.page;
+		if (!page) return res.status(200).json([]);
+		requestUrl(
+			`https://javpark.net/page/${page}/`,
+			async (error, response, body) => {
+				if (error) {
+					console.log(error);
+					return res.status(200).json([]);
+				}
+				const $ = cheerio.load(body);
+				const bookmarkLinks = [];
+				$('a[rel="bookmark"]').each((index, element) => {
+					const href = $(element).attr('href');
+					bookmarkLinks.push(requestTape(getMovieCode(href)));
+				});
+				const promiseAll = await Promise.all(bookmarkLinks);
 
-			return res.status(200).json(promiseAll.flatMap((item) => item));
-		}
-	);
+				return res.status(200).json(promiseAll.flatMap((item) => item));
+			}
+		);
+	} catch (e) {
+		return res.status(200).json([]);
+	}
 });
 
 app.get('/tape', async (req, res) => {
-	const { name, min, max } = req.query;
+	try {
+		const { name, min, max } = req.query;
 
-	let arrayPromise = [];
-	let arrayVideo = [];
-	//`${name}-${index.toString().padStart(3, '0')}.mp4`
-	for (let index = min; index <= max; index++) {
-		arrayPromise.push(
-			requestTape(`${name}-${index.toString().padStart(3, '0')}.mp4`)
+		let arrayPromise = [];
+		let arrayVideo = [];
+		//`${name}-${index.toString().padStart(3, '0')}.mp4`
+		for (let index = min; index <= max; index++) {
+			arrayPromise.push(
+				requestTape(`${name}-${index.toString().padStart(3, '0')}.mp4`)
+			);
+		}
+		const promiseAll = await Promise.all(arrayPromise);
+		console.log(
+			'test',
+			promiseAll.flatMap((item) => item)
 		);
+		return res.status(200).json(promiseAll.flatMap((item) => item));
+	} catch (e) {
+		return res.status(200).json([]);
 	}
-	const promiseAll = await Promise.all(arrayPromise);
-	console.log(
-		'test',
-		promiseAll.flatMap((item) => item)
-	);
-	return res.status(200).json(promiseAll.flatMap((item) => item));
 });
 app.get('/torrent', async (req, res) => {
 	try {
@@ -248,13 +263,17 @@ app.get('/test', async (req, res) => {
 	}
 });
 app.get('/upload', async (req, res) => {
-	const url = req.query.url;
-	console.log({ url });
-	const response = await axios.get(
-		`https://api.streamtape.com/remotedl/add?login=fe3cd1a2d01410461720&key=x2qrgW0l4Ztk6VO&url=${url}`
-	);
-	console.log('data', response.data);
-	return res.status(200).json({ data: response.data });
+	try {
+		const url = req.query.url;
+		console.log({ url });
+		const response = await axios.get(
+			`https://api.streamtape.com/remotedl/add?login=fe3cd1a2d01410461720&key=x2qrgW0l4Ztk6VO&url=${url}`
+		);
+		console.log('data', response.data);
+		return res.status(200).json({ data: response.data });
+	} catch (e) {
+		return res.status(200).json([]);
+	}
 });
 function wait(ms) {
 	return new Promise((resolve) => {
@@ -296,7 +315,7 @@ app.get('/render-direct', async (req, res) => {
 		console.log('response create stream', createStream.data);
 		return res.status(200).json([createStream.data.result.url]);
 	} catch (e) {
-		console.log({ e });
+		return res.status(200).json([]);
 	}
 });
 
