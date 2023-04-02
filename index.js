@@ -267,7 +267,7 @@ app.get('/upload', async (req, res) => {
 		const url = req.query.url;
 		console.log({ url });
 		const response = await axios.get(
-			`https://api.streamtape.com/remotedl/add?login=fe3cd1a2d01410461720&key=x2qrgW0l4Ztk6VO&url=${url}`
+			`https://api.streamtape.com/remotedl/add?login=${process.env.LOGIN}&key=${process.env.PASS}&url=${url}`
 		);
 		console.log('data', response.data);
 		return res.status(200).json({ data: response.data });
