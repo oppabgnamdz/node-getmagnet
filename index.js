@@ -17,7 +17,7 @@ const got = require('got');
 var path = require('path');
 const app = express();
 app.use(cors());
-
+//test
 app.get('/', async (req, res) => {
 	try {
 		const name = req.query.name;
@@ -262,6 +262,7 @@ app.get('/test', async (req, res) => {
 		return res.status(200).json([]);
 	}
 });
+
 app.get('/upload', async (req, res) => {
 	try {
 		const url = req.query.url;
