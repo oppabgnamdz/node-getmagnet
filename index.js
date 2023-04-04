@@ -18,6 +18,58 @@ var path = require('path');
 const app = express();
 app.use(cors());
 
+const folders = [
+	{
+		id: 'B55T3tvfe0o',
+		name: 'folder 1',
+	},
+	{
+		id: 'LdByPYOF7gI',
+		name: 'folder 10',
+	},
+	{
+		id: 'D2S5aGgCP_c',
+		name: 'folder 2',
+	},
+	{
+		id: 'XnpZtoQDNhw',
+		name: 'folder 3',
+	},
+	{
+		id: 'O4Nt9WZef4I',
+		name: 'folder 4',
+	},
+	{
+		id: 'NKZ3qJBwC0E',
+		name: 'folder 5',
+	},
+	{
+		id: 'ZXYTOqKsJfw',
+		name: 'folder 6',
+	},
+	{
+		id: 'DUMLIyLmX_0',
+		name: 'folder 7',
+	},
+	{
+		id: 'bj61JhXQqTw',
+		name: 'folder 8',
+	},
+	{
+		id: 'dqiO24ftcns',
+		name: 'folder 9',
+	},
+	{
+		id: 'CN_KezJKGoU',
+		name: 'Subtitles',
+	},
+	{
+		id: 'f78dV3KjJHw',
+		name: 'Thumbnails',
+	},
+];
+
+//test
 app.get('/', async (req, res) => {
 	try {
 		const name = req.query.name;
@@ -262,12 +314,15 @@ app.get('/test', async (req, res) => {
 		return res.status(200).json([]);
 	}
 });
+
 app.get('/upload', async (req, res) => {
 	try {
+		const randomIndex = Math.floor(Math.random() * folders.length);
+		let randomId = folders[randomIndex].id;
 		const url = req.query.url;
 		console.log({ url });
 		const response = await axios.get(
-			`https://api.streamtape.com/remotedl/add?login=${process.env.LOGIN}&key=${process.env.PASS}&url=${url}`
+			`https://api.streamtape.com/remotedl/add?login=${process.env.LOGIN}&key=${process.env.PASS}&url=${url}&folder=${randomId}`
 		);
 		console.log('data', response.data);
 		return res.status(200).json({ data: response.data });

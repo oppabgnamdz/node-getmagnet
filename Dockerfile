@@ -9,8 +9,8 @@ RUN npm install
 
 # Thiết lập môi trường cho ứng dụng
 ENV PORT=4000
-ENV LOGIN=abc87c8588f5fb92f661
-ENV PASS=OdXxejgmmWfZ26k
+ENV LOGIN=a073d4ce84538cdc139b
+ENV PASS=OAAmqmXJ7oSgrW
 
 # Mở cổng để truy cập ứng dụng
 EXPOSE $PORT
