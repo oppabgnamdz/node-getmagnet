@@ -20,78 +20,43 @@ app.use(cors());
 
 const folderSearch = [
   {
-    id: "GpuZ7rJDXac",
+    id: "LJOFNlj4y6k",
     name: "folder 1",
   },
   {
-    id: "AZqKQccpEas",
-    name: "folder 2",
-  },
-  {
-    id: "Z3T2tAXOhMA",
-    name: "folder 3",
-  },
-  {
-    id: "VkI-7mtrJ5o",
-    name: "folder 5",
-  },
-  {
-    id: "YaK1kvQne_A",
-    name: "folder4",
-  },
-  {
-    id: "TpABNw4OJRM",
-    name: "Subtitles",
-  },
-  {
-    id: "eUizuT9fBoE",
-    name: "Thumbnails",
-  },
-];
-
-const folders = [
-  {
-    id: "XWlrCLa1JRc",
-    name: "folder 1",
-  },
-  {
-    id: "Ci8TfLyl17U",
+    id: "fu7gktctwFk",
     name: "folder 10",
   },
   {
-    id: "W1-kNdZf2q8",
-    name: "folder 11",
-  },
-  {
-    id: "DhTTlemBh4c",
+    id: "IGjWAqHhbGc",
     name: "folder 2",
   },
   {
-    id: "Ylydt2Hq4M0",
+    id: "TR13njFeG7I",
     name: "folder 3",
   },
   {
-    id: "ZZfCcOa1rjI",
+    id: "KPxsc3FwKno",
     name: "folder 4",
   },
   {
-    id: "b7JCnkLdKEE",
+    id: "bq4CNXmyaO8",
     name: "folder 5",
   },
   {
-    id: "Yz0-cjB8vTQ",
+    id: "dhmeCyZJVX0",
     name: "folder 6",
   },
   {
-    id: "d9Rz67vuXRk",
+    id: "TZbdVbGMOhU",
     name: "folder 7",
   },
   {
-    id: "dWmuXktjiRI",
+    id: "VrQk6G-UPJ0",
     name: "folder 8",
   },
   {
-    id: "XkYHuz8XRmU",
+    id: "C_-0byaygXA",
     name: "folder 9",
   },
 ];
@@ -199,8 +164,6 @@ app.get("/park", async (req, res) => {
     return res.status(200).json([]);
   }
 });
-
-
 
 app.get("/tape", async (req, res) => {
   try {
@@ -593,7 +556,7 @@ const renderFile = (res, date, side) => {
 };
 
 app.listen(process.env.PORT, () =>
-  console.log("Example app listening on port 3000!")
+  console.log(`Example app listening on port ${process.env.PORT}`)
 );
 process.on("uncaughtException", (err) => {
   console.log({ err });
