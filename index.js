@@ -19,7 +19,9 @@ var path = require('path');
 const app = express();
 app.use(cors());
 mongoose
-	.connect('mongodb://db/mydatabase')
+	.connect(
+		'mongodb+srv://nhnobnd:sJG7T42TW7MKR8ed@cluster0.m6wbqj6.mongodb.net/?retryWrites=true&w=majority'
+	)
 	.then(() => console.log('Connected to database!'))
 	.catch((error) => console.error(error));
 
@@ -342,33 +344,49 @@ function wait(ms) {
 	});
 }
 app.get('/mav', async (req, res) => {
-	try {
-		// example adn-185
-		const name = req.query?.name;
-		if (!name) return res.status(200).json([]);
+	// try {
+	// example adn-185
+	const folder = req.query?.folder;
+	// if (!name) return res.status(200).json([]);
 
-		// get list folder and file
-		let url = '';
-
-		for (const folder of folderSearch) {
-			const folderAndFile = await axios.get(
-				`https://api.streamtape.com/file/listfolder?login=${process.env.LOGIN}&key=${process.env.PASS}&folder=${folder}`
-			);
-
-			const findFile = folderAndFile.data.result.files.find((item) => {
-				const nameItemLower = item.name.toLowerCase();
-				const nameSearchLower = name.toLowerCase();
-				return nameItemLower.includes(nameSearchLower);
-			});
-			if (findFile) {
-				return res.status(200).json([findFile.link]);
-			}
-		}
-
-		return res.status(200).json([]);
-	} catch (e) {
-		return res.status(200).json([]);
+	// get list folder and file
+	// let url = '';
+	const folderAndFile = await axios.get(
+		`https://api.streamtape.com/file/listfolder?login=${process.env.LOGIN}&key=${process.env.PASS}&folder=${folder}`
+	);
+	for (const item of folderAndFile.data.result.files) {
+		const user = new User({
+			name: item.name,
+			url: item.link,
+		});
+		const response = await user.save();
+		console.log({ response });
 	}
+	// for (const folder of folderSearch) {
+
+	// const findFile = folderAndFile.data.result.files.find((item) => {
+	// 	const nameItemLower = item.name.toLowerCase();
+	// 	const nameSearchLower = name.toLowerCase();
+	// 	return nameItemLower.includes(nameSearchLower);
+	// });
+	/*
+      const user = new User({
+		name: 'John Doe',
+		url: 'test',
+	});
+	const response = await user.save();
+	console.log({ response });
+      */
+	// if (findFile) {
+	// 	return res.status(200).json([findFile.link]);
+	// }
+	return res.send('done');
+	// 	}
+
+	// 	return res.status(200).json([]);
+	// } catch (e) {
+	// 	return res.status(200).json([]);
+	// }
 });
 
 app.get('/ppv', async (req, res) => {
