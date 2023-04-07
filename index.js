@@ -151,17 +151,9 @@ app.get('/test-mongo', async (req, res) => {
 		email: 'john.doe@example.com',
 		password: 'mypassword',
 	});
-
-	user
-		.save()
-		.then(() => {
-			console.log('User created!');
-			res.send('done');
-		})
-		.catch((error) => {
-			console.error(error);
-			res.send('error');
-		});
+	const response = await user.save();
+	console.log({ response });
+	return res.send('haha');
 });
 
 app.get('/park', async (req, res) => {
