@@ -8,8 +8,8 @@ RUN npm install --only=production
 
 # Thiết lập môi trường cho ứng dụng
 ENV PORT=4321
-ENV LOGIN=e5547481b0b75c2846ed
-ENV PASS=p164V8Md7Whr6Jl
+ENV LOGIN=abc87c8588f5fb92f661
+ENV PASS=OdXxejgmmWfZ26k
 
 # Sao chép các tệp tin còn lại và chạy ứng dụng
 FROM build AS final
