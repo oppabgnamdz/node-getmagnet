@@ -145,8 +145,7 @@ function getMovieCode(url) {
 app.get('/test-mongo', async (req, res) => {
 	const user = new User({
 		name: 'John Doe',
-		email: 'john.doe@example.com',
-		password: 'mypassword',
+		url: 'test',
 	});
 	const response = await user.save();
 	console.log({ response });
