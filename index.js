@@ -12,6 +12,7 @@ const cheerio = require('cheerio');
 require('dotenv').config();
 const http = require('http');
 const ObjectsToCsv = require('objects-to-csv');
+const User = require('./UrlModel');
 const { JSDOM } = jsdom;
 const got = require('got');
 var path = require('path');
