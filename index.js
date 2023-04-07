@@ -18,11 +18,7 @@ var path = require('path');
 const app = express();
 app.use(cors());
 mongoose
-	.connect('mongodb://db/mydatabase', {
-		useNewUrlParser: true,
-		useUnifiedTopology: true,
-		// useCreateIndexes: true,
-	})
+	.connect('mongodb://db/mydatabase')
 	.then(() => console.log('Connected to database!'))
 	.catch((error) => console.error(error));
 
