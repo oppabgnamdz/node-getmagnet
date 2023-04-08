@@ -362,6 +362,7 @@ app.get('/mav', async (req, res) => {
 			// console.log({ response });
 			// }
 			const find = await User.findOne({ url: params.url });
+			console.log({ find });
 			if (!find) {
 				const user = new User(params);
 				const response = await user.save();
