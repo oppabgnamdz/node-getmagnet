@@ -12,15 +12,17 @@ const cheerio = require('cheerio');
 require('dotenv').config();
 const http = require('http');
 const ObjectsToCsv = require('objects-to-csv');
+const Throttle = require('promise-parallel-throttle');
 const User = require('./UrlModel');
 const { JSDOM } = jsdom;
 const got = require('got');
 var path = require('path');
 const app = express();
+
 app.use(cors());
 mongoose
 	.connect(
-		'mongodb+srv://nhnobnd:sJG7T42TW7MKR8ed@cluster0.m6wbqj6.mongodb.net/?retryWrites=true&w=majority'
+		'mongodb+srv://nhnobnd:sJG7T42TW7MKR8ed@cluster0.m6wbqj6.mongodb.net/my-obnd?retryWrites=true&w=majority'
 	)
 	.then(() => console.log('Connected to database!'))
 	.catch((error) => console.error(error));
@@ -344,49 +346,25 @@ function wait(ms) {
 	});
 }
 app.get('/mav', async (req, res) => {
-	// try {
-	// example adn-185
 	const folder = req.query?.folder;
-	// if (!name) return res.status(200).json([]);
 
-	// get list folder and file
-	// let url = '';
 	const folderAndFile = await axios.get(
 		`https://api.streamtape.com/file/listfolder?login=${process.env.LOGIN}&key=${process.env.PASS}&folder=${folder}`
 	);
-	for (const item of folderAndFile.data.result.files) {
-		const user = new User({
-			name: item.name,
-			url: item.link,
-		});
+
+	const doSave = async (params) => {
+		const user = new User(params);
 		const response = await user.save();
 		console.log({ response });
-	}
-	// for (const folder of folderSearch) {
-
-	// const findFile = folderAndFile.data.result.files.find((item) => {
-	// 	const nameItemLower = item.name.toLowerCase();
-	// 	const nameSearchLower = name.toLowerCase();
-	// 	return nameItemLower.includes(nameSearchLower);
-	// });
-	/*
-      const user = new User({
-		name: 'John Doe',
-		url: 'test',
+	};
+	const queue = folderAndFile.data.result.files.map((item) => {
+		const object = { name: item.name, url: item.link };
+		return () => doSave(object);
 	});
-	const response = await user.save();
-	console.log({ response });
-      */
-	// if (findFile) {
-	// 	return res.status(200).json([findFile.link]);
-	// }
-	return res.send('done');
-	// 	}
+	const throttle = await Throttle.all(queue);
+	console.log({ throttle });
 
-	// 	return res.status(200).json([]);
-	// } catch (e) {
-	// 	return res.status(200).json([]);
-	// }
+	return res.send('done');
 });
 
 app.get('/ppv', async (req, res) => {
