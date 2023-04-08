@@ -368,7 +368,7 @@ app.get('/mav', async (req, res) => {
 				console.log({ response });
 			}
 		};
-		const queue = folderAndFile.data.result.files.map((item) => {
+		const queue = folderAndFile.data.result.files.reverse().map((item) => {
 			const object = { name: item.name, url: item.link };
 			return () => doSave(object);
 		});
