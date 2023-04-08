@@ -346,25 +346,39 @@ function wait(ms) {
 	});
 }
 app.get('/mav', async (req, res) => {
-	const folder = req.query?.folder;
+	try {
+		const folder = req.query?.folder;
 
-	const folderAndFile = await axios.get(
-		`https://api.streamtape.com/file/listfolder?login=${process.env.LOGIN}&key=${process.env.PASS}&folder=${folder}`
-	);
+		const folderAndFile = await axios.get(
+			`https://api.streamtape.com/file/listfolder?login=${process.env.LOGIN}&key=${process.env.PASS}&folder=${folder}`
+		);
 
-	const doSave = async (params) => {
-		const user = new User(params);
-		const response = await user.save();
-		console.log({ response });
-	};
-	const queue = folderAndFile.data.result.files.map((item) => {
-		const object = { name: item.name, url: item.link };
-		return () => doSave(object);
-	});
-	const throttle = await Throttle.all(queue);
-	console.log({ throttle });
+		const doSave = async (params) => {
+			// if(){
 
-	return res.send('done');
+			// }else{
+			//   const user = new User(params);
+			// const response = await user.save();
+			// console.log({ response });
+			// }
+			const find = await User.findOne({ url: params.url });
+			if (!find) {
+				const user = new User(params);
+				const response = await user.save();
+				console.log({ response });
+			}
+		};
+		const queue = folderAndFile.data.result.files.map((item) => {
+			const object = { name: item.name, url: item.link };
+			return () => doSave(object);
+		});
+		const throttle = await Throttle.all(queue);
+		console.log({ throttle });
+
+		return res.send('done');
+	} catch (e) {
+		return res.send('error');
+	}
 });
 
 app.get('/ppv', async (req, res) => {
