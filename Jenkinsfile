@@ -4,7 +4,7 @@ pipeline {
         stage('Checkout source code') {
             steps {
                 git branch: 'nhnobnd1', url: 'https://github.com/oppabgnamdz/node-getmagnet'
-                slackSend(color: '#36a64f', message: "Clone done. Start,   ${JOB_NAME}  #${BUILD_NUMBER} <!channel>")
+                slackSend(color: '#36a64f', message: "Clone done. Start,   ${JOB_NAME}  #${BUILD_NUMBER} ")
                 
             }
         }
@@ -23,7 +23,7 @@ pipeline {
             steps {
                 sh 'docker build -t node-magnet2 .'
                 sh 'docker run -d --name node-magnet2 -p 4000:4000 node-magnet2'
-                slackSend(color: '#36a64f', message: "The build has completed successfully.${JOB_NAME}  #${BUILD_NUMBER} <!channel>")
+                slackSend(color: '#36a64f', message: "The build has completed successfully.${JOB_NAME}  #${BUILD_NUMBER}")
 
             }
         }
