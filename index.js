@@ -549,7 +549,6 @@ app.get("/total", async (req, res) => {
     return res.status(200).json([]);
   }
 });
-//qweqwe
 app.get("*", function (req, res) {
   return res.status(200).json([]);
 });
