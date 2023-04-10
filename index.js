@@ -544,7 +544,7 @@ app.get("/total", async (req, res) => {
       arrPageThreeDays.push(JSON.parse(torrentP.text).length);
       // arrPageThreeDays.push(JSON.parse(torrentT.text).length);
     }
-
+    //ádasd
     return res.status(200).json(arrPageThreeDays);
   } catch (e) {
     return res.status(200).json([]);
