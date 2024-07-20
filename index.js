@@ -218,12 +218,12 @@ app.get("/torrent", async (req, res) => {
         for (var i = 0; i < l.length; i++) {
           arr.push(l[i].href);
         }
-        const breakPage = arr.find((item) => item.includes("magnet:?xt"));
+        const breakPage = arr.find((item) => item.includes("/download/"));
         if (!breakPage) {
           break;
         }
         console.log({ breakPage });
-        const needArr = arr.filter((item) => item.includes("magnet:?xt"));
+        const needArr = arr.filter((item) => item.includes("/download/"));
         const haveDomain = needArr.map((item) => item);
         data = [...data, ...haveDomain];
       }
@@ -274,7 +274,7 @@ app.get("/test", async (req, res) => {
         for (var i = 0; i < l.length; i++) {
           arr.push(l[i].href);
         }
-        const breakPage = arr.find((item) => item.includes("magnet:?xt"));
+        const breakPage = arr.find((item) => item.includes("/download/"));
 
         if (!breakPage) {
           const mapping = data.map((item, index) => {
@@ -285,7 +285,7 @@ app.get("/test", async (req, res) => {
           break;
         }
 
-        const needArr = arr.filter((item) => item.includes("magnet:?xt"));
+        const needArr = arr.filter((item) => item.includes("/download/"));
         const haveDomain = needArr.map((item) => item);
         data = [...data, ...haveDomain];
       }
@@ -397,7 +397,7 @@ app.get("/ppv", async (req, res) => {
         for (var i = 0; i < l.length; i++) {
           arr.push(l[i].href);
         }
-        const breakPage = arr.find((item) => item.includes("magnet:?xt"));
+        const breakPage = arr.find((item) => item.includes("/download/"));
         console.log({ breakPage });
         if (!breakPage) {
           const mapping = data.map((item, index) => {
@@ -407,7 +407,7 @@ app.get("/ppv", async (req, res) => {
           break;
         }
 
-        const needArr = arr.filter((item) => item.includes("magnet:?xt"));
+        const needArr = arr.filter((item) => item.includes("/download/"));
         const haveDomain = needArr.map((item) => item);
         data = [...data, ...haveDomain];
       }
@@ -455,13 +455,13 @@ app.get("/jav", async (req, res) => {
         for (var i = 0; i < l.length; i++) {
           arr.push(l[i].href);
         }
-        const breakPage = arr.find((item) => item.includes("magnet:?xt"));
+        const breakPage = arr.find((item) => item.includes("/download/"));
         console.log({ breakPage });
         if (!breakPage) {
           break;
         }
 
-        const needArr = arr.filter((item) => item.includes("magnet:?xt"));
+        const needArr = arr.filter((item) => item.includes("/download/"));
         const haveDomain = needArr.map((item) => item);
         data = [...data, ...haveDomain];
       }
