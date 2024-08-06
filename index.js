@@ -265,7 +265,22 @@ app.get("/test", async (req, res) => {
     try {
       let data = [];
       for (let j = parseInt(start); j < parseInt(end); j++) {
-        const html = await got(url(j + 1));
+        const html = await got(url(j + 1),{
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          },
+          // Uncomment the following lines if you want to use a proxy
+          // agent: {
+          //   https: new HttpsProxyAgent('http://your-proxy-url:port')
+          // },
+          retry: {
+            limit: 3,
+            statusCodes: [403, 408, 413, 429, 500, 502, 503, 504]
+          },
+          timeout: {
+            request: 30000
+          }
+        });
 
         const dom = new JSDOM(`${html.body}`);
         var arr = [],
@@ -388,7 +403,22 @@ app.get("/ppv", async (req, res) => {
     try {
       let data = [];
       for (let j = parseInt(start); j < parseInt(end); j++) {
-        const html = await got(url(j + 1));
+        const html = await got(url(j + 1),{
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          },
+          // Uncomment the following lines if you want to use a proxy
+          // agent: {
+          //   https: new HttpsProxyAgent('http://your-proxy-url:port')
+          // },
+          retry: {
+            limit: 3,
+            statusCodes: [403, 408, 413, 429, 500, 502, 503, 504]
+          },
+          timeout: {
+            request: 30000
+          }
+        });
 
         const dom = new JSDOM(`${html.body}`);
         var arr = [],
@@ -446,7 +476,22 @@ app.get("/jav", async (req, res) => {
     try {
       let data = [];
       for (let j = parseInt(start); j < parseInt(end); j++) {
-        const html = await got(url(j + 1));
+        const html = await got(url(j + 1),{
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+          },
+          // Uncomment the following lines if you want to use a proxy
+          // agent: {
+          //   https: new HttpsProxyAgent('http://your-proxy-url:port')
+          // },
+          retry: {
+            limit: 3,
+            statusCodes: [403, 408, 413, 429, 500, 502, 503, 504]
+          },
+          timeout: {
+            request: 30000
+          }
+        });
 
         const dom = new JSDOM(`${html.body}`);
         var arr = [],
