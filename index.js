@@ -309,7 +309,7 @@ app.get('/special', async (req, res) => {
 		let torrents;
 
 		switch (side) {
-			case 'o':
+			case 'j':
 				const formattedDate = moment(date).format('YYYY/MM/DD');
 				console.log({ formattedDate });
 				const crawlPages = async (start, end) => {
@@ -337,39 +337,6 @@ app.get('/special', async (req, res) => {
 					torrents = await crawlPages(parseInt(page) - 1, parseInt(page));
 				} else {
 					torrents = await crawlPages(0, 200);
-				}
-				break;
-
-			case 'j':
-				const formattedDateJAV = moment(date).format('YYYY/MM/DD');
-				console.log({ formattedDate: formattedDateJAV });
-				const crawlPagesJAV = async (start, end) => {
-					let allLinks = [];
-					for (let j = start; j < end; j++) {
-						const pageUrl = `${BASE_URL_JAV}/date/${formattedDateJAV}?page=${
-							j + 1
-						}`;
-						console.log({ pageUrl });
-						const html = await fetchPage(pageUrl);
-						if (!html) continue;
-
-						const $ = cheerio.load(html);
-						const links = $('a[href*="/download/"]')
-							.map((_, el) => $(el).attr('href'))
-							.get();
-						console.log({ links });
-						if (links.length === 0) break;
-						allLinks = [...allLinks, ...links];
-					}
-					console.log({ allLinks });
-
-					return allLinks.map((link) => `${BASE_URL_JAV}${link}`);
-				};
-
-				if (page) {
-					torrents = await crawlPagesJAV(parseInt(page) - 1, parseInt(page));
-				} else {
-					torrents = await crawlPagesJAV(0, 200);
 				}
 				break;
 
