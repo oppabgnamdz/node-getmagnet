@@ -525,7 +525,35 @@ app.get('/special', async (req, res) => {
 		let torrents;
 		switch (side) {
 			case 'j':
-				torrents = await client.get(`/test?date=${date}&page=${page}`);
+				const formattedDate = moment(date).format('YYYY/MM/DD');
+				console.log({ formattedDate });
+				const crawlPages = async (start, end) => {
+					let allLinks = [];
+					for (let j = start; j < end; j++) {
+						const pageUrl = `${BASE_URL}/${formattedDate}?page=${j + 1}`;
+						console.log({ pageUrl });
+						const html = await fetchPage(pageUrl);
+						if (!html) continue;
+
+						const $ = cheerio.load(html);
+						const links = $('a[href*="/torrent/"][href$=".torrent"]')
+							.map((_, el) => $(el).attr('href'))
+							.get();
+						console.log({ links });
+						if (links.length === 0) break;
+						allLinks = [...allLinks, ...links];
+					}
+					console.log({ allLinks });
+
+					return allLinks.map((link) => `${BASE_URL}${link}`);
+				};
+
+				if (page) {
+					torrents = await crawlPages(parseInt(page) - 1, parseInt(page));
+				} else {
+					torrents = await crawlPages(0, 200);
+				}
+				console.log({ torrents });
 				break;
 			case 'f':
 				torrents = await client.get(`/ppv?date=${date}&page=${page}`);
@@ -533,12 +561,11 @@ app.get('/special', async (req, res) => {
 
 			default:
 				torrents = await client.get(`/torrent?date=${date}&page=${page}`);
+				torrents = JSON.parse(torrents.text);
 				break;
 		}
-		// side === 'j'
-		// 	? (torrents = await client.get(`/test?date=${date}`))
-		// 	: (torrents = await client.get(`/torrent?date=${date}`));
-		return res.status(200).json(JSON.parse(torrents.text));
+		console.log('clgt', torrents);
+		return res.status(200).json(torrents);
 	} catch (e) {
 		return res.status(200).json([]);
 	}
