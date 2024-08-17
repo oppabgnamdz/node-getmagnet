@@ -533,6 +533,7 @@ app.get('/special', async (req, res) => {
 						const pageUrl = `${BASE_URL}/${formattedDate}?page=${j + 1}`;
 						console.log({ pageUrl });
 						const html = await fetchPage(pageUrl);
+            console.log({html})
 						if (!html) continue;
 
 						const $ = cheerio.load(html);
