@@ -398,12 +398,8 @@ app.get('/total', async (req, res) => {
 			const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
 			console.log({ date });
 			const client = request(req.app);
-			let [torrentsJ, torrentP] = await Promise.all([
-				client.get(`/test?date=${date}`),
-				client.get(`/torrent?date=${date}`),
-			]);
+			let [torrentP] = await Promise.all([client.get(`/torrent?date=${date}`)]);
 
-			arrPageThreeDays.push(JSON.parse(torrentsJ.text).length);
 			arrPageThreeDays.push(JSON.parse(torrentP.text).length);
 		}
 
