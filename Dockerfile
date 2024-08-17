@@ -1,4 +1,4 @@
-FROM node:14
+FROM node:18
 
 # Sao chép các tệp tin của ứng dụng vào container
 WORKDIR /app
