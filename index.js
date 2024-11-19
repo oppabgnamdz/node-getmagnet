@@ -237,8 +237,8 @@ app.get('/special', async (req, res) => {
 
 		const crawlPages = async (baseUrl, start, end) => {
 			const linkMap = new Map();
+			const baseWithoutDate = baseUrl.replace('/date', '');
 
-			// If specific page requested, only process that page
 			if (page) {
 				const pageUrl = `${baseUrl}/${formattedDate}?page=${page}`;
 				const html = await fetchPage(pageUrl);
@@ -255,7 +255,6 @@ app.get('/special', async (req, res) => {
 					});
 				}
 			} else {
-				// Process all pages sequentially
 				for (let j = start; j < end; j++) {
 					const pageUrl = `${baseUrl}/${formattedDate}?page=${j + 1}`;
 					const html = await fetchPage(pageUrl);
@@ -274,13 +273,12 @@ app.get('/special', async (req, res) => {
 						linkMap.set(code, link);
 					});
 
-					// Add delay between pages
 					await new Promise((resolve) => setTimeout(resolve, 1000));
 				}
 			}
 
 			const uniqueLinks = Array.from(linkMap.values());
-			return uniqueLinks.map((link) => `${baseUrl}${link}`);
+			return uniqueLinks.map((link) => `${baseWithoutDate}${link}`);
 		};
 
 		const baseUrl = side === 'j' ? BASE_URL : BASE_URL_P;
