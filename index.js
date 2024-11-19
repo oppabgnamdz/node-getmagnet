@@ -19,50 +19,8 @@ const { throttle } = require('lodash');
 const cheerio = require('cheerio');
 app.use(cors());
 
-const folders = [
-	{
-		id: 'LJOFNlj4y6k',
-		name: 'folder 1',
-	},
-	{
-		id: 'fu7gktctwFk',
-		name: 'folder 10',
-	},
-	{
-		id: 'IGjWAqHhbGc',
-		name: 'folder 2',
-	},
-	{
-		id: 'TR13njFeG7I',
-		name: 'folder 3',
-	},
-	{
-		id: 'KPxsc3FwKno',
-		name: 'folder 4',
-	},
-	{
-		id: 'bq4CNXmyaO8',
-		name: 'folder 5',
-	},
-	{
-		id: 'dhmeCyZJVX0',
-		name: 'folder 6',
-	},
-	{
-		id: 'TZbdVbGMOhU',
-		name: 'folder 7',
-	},
-	{
-		id: 'VrQk6G-UPJ0',
-		name: 'folder 8',
-	},
-	{
-		id: 'C_-0byaygXA',
-		name: 'folder 9',
-	},
-];
-const BASE_URL = 'https://onejav.com';
-const BASE_URL_JAV = 'https://www.141jav.com';
+const BASE_URL = 'https://www.141jav.com/date';
+const BASE_URL_P = 'https://www.141ppv.com/date';
 
 const fetchPage = throttle(async (url) => {
 	try {
@@ -154,78 +112,49 @@ app.get('/ppv', async (req, res) => {
 			req.query.date || moment().subtract(1, 'd').format('YYYY/MM/DD');
 		const page = req.query.page === 'undefined' ? null : req.query.page;
 
-		let start = 0;
-		let end = 200;
-		let base = 'https://www.141ppv.com';
-		let host = `https://www.141ppv.com/date/${moment(date).format(
-			'YYYY/MM/DD'
-		)}?page=`;
-		const url = (index) => {
-			return `${host}${index}`;
-		};
-		if (page) {
-			start = parseInt(page) - 1;
-			end = parseInt(page);
-		}
-		try {
-			let data = [];
-			for (let j = parseInt(start); j < parseInt(end); j++) {
-				const html = await got(url(j + 1), {
-					headers: {
-						'User-Agent':
-							'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-					},
-					// Uncomment the following lines if you want to use a proxy
-					// agent: {
-					//   https: new HttpsProxyAgent('http://your-proxy-url:port')
-					// },
-					retry: {
-						limit: 3,
-						statusCodes: [403, 408, 413, 429, 500, 502, 503, 504],
-					},
-					timeout: {
-						request: 30000,
-					},
-				});
+		let start = page ? parseInt(page) - 1 : 0;
+		let end = page ? parseInt(page) : 200;
+		const base = 'https://www.141ppv.com';
+		const host = `${base}/date/${moment(date).format('YYYY/MM/DD')}?page=`;
 
-				const dom = new JSDOM(`${html.body}`);
-				var arr = [],
-					l = dom.window.document.links;
+		let result = [];
 
-				for (var i = 0; i < l.length; i++) {
-					arr.push(l[i].href);
-				}
-				const breakPage = arr.find((item) => item.includes('/download/'));
-				console.log({ breakPage });
-				if (!breakPage) {
-					const mapping = data.map((item, index) => {
-						return base + item;
-					});
-					return res.send(mapping);
-					break;
-				}
+		for (let j = start; j < end; j++) {
+			const html = await got(`${host}${j + 1}`, {
+				headers: {
+					'User-Agent':
+						'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+				},
+				retry: {
+					limit: 3,
+					statusCodes: [403, 408, 413, 429, 500, 502, 503, 504],
+				},
+				timeout: {
+					request: 30000,
+				},
+			});
 
-				const needArr = arr.filter((item) => item.includes('/download/'));
-				const haveDomain = needArr.map((item) => item);
-				data = [...data, ...haveDomain];
-			}
+			const dom = new JSDOM(html.body);
+			const links = Array.from(dom.window.document.links)
+				.map((link) => link.href)
+				.filter((href) => href.includes('/download/'));
+			console.log({ links });
+
+			if (!links.length) break;
+
+			const fullUrls = links.map((link) => base + link);
 			if (page) {
-				console.log({ data });
-				const mapping = data.map((item, index) => {
-					return base + item;
-				});
-				return res.send(mapping);
+				return res.status(200).json(fullUrls);
 			}
-		} catch (e) {
-			console.log({ e });
-			return res.status(200).json([]);
+			result.push(...fullUrls);
 		}
-		return res.status(200).json([]);
+
+		return res.status(200).json(result);
 	} catch (e) {
+		console.error(e);
 		return res.status(200).json([]);
 	}
 });
-
 app.get('/jav', async (req, res) => {
 	// const vgmUrl = 'https://onejav.com/date/2022/08/06?page=1';
 	// const test = await got(vgmUrl);
@@ -300,82 +229,46 @@ app.get('/special', async (req, res) => {
 		if (isNaN(minusDate)) {
 			return res.status(200).json([]);
 		}
-		console.log({ minusDate });
 		const side = req.query.date.split(',')[1];
 		const page = req.query.date.split(',')[2];
 		const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
-		console.log({ date });
-		const client = request(req.app);
-		let torrents;
+		const formattedDate = moment(date).format('YYYY/MM/DD');
 
-		switch (side) {
-			case 'j':
-				const formattedDate = moment(date).format('YYYY/MM/DD');
-				console.log({ formattedDate });
-				const crawlPages = async (start, end) => {
-					let allLinks = [];
-					for (let j = start; j < end; j++) {
-						const pageUrl = `${BASE_URL}/${formattedDate}?page=${j + 1}`;
-						console.log({ pageUrl });
-						const html = await fetchPage(pageUrl);
-						if (!html) continue;
+		const crawlPages = async (baseUrl, start, end) => {
+			const linkMap = new Map();
 
-						const $ = cheerio.load(html);
-						const links = $('a[href*="/torrent/"][href$=".torrent"]')
-							.map((_, el) => $(el).attr('href'))
-							.get();
-						console.log({ links });
-						if (links.length === 0) break;
-						allLinks = [...allLinks, ...links];
-					}
-					console.log({ allLinks });
+			for (let j = start; j < end; j++) {
+				const pageUrl = `${baseUrl}/${formattedDate}?page=${j + 1}`;
+				const html = await fetchPage(pageUrl);
+				if (!html) continue;
 
-					return allLinks.map((link) => `${BASE_URL}${link}`);
-				};
+				const $ = cheerio.load(html);
+				const links = $('a[href*="/download/"]')
+					.map((_, el) => $(el).attr('href'))
+					.get();
 
-				if (page) {
-					torrents = await crawlPages(parseInt(page) - 1, parseInt(page));
-				} else {
-					torrents = await crawlPages(0, 200);
-				}
-				break;
+				if (links.length === 0) break;
 
-			case 'f':
-				torrents = await client.get(`/ppv?date=${date}&page=${page}`);
-				break;
+				links.forEach((link) => {
+					const code = link.split('/').pop().split('.')[0];
+					linkMap.set(code, link);
+				});
+			}
 
-			default:
-				torrents = await client.get(`/torrent?date=${date}&page=${page}`);
-				torrents = JSON.parse(torrents.text);
-				break;
-		}
+			const uniqueLinks = Array.from(linkMap.values());
+			return uniqueLinks.map((link) => `${baseUrl}${link}`);
+		};
 
-		console.log('clgt', torrents);
+		const baseUrl = side === 'j' ? BASE_URL : BASE_URL_P;
+		const start = page ? parseInt(page) - 1 : 0;
+		const end = page ? parseInt(page) : 200;
+
+		const torrents = await crawlPages(baseUrl, start, end);
 		return res.status(200).json(torrents);
 	} catch (e) {
 		return res.status(200).json([]);
 	}
 });
-app.get('/total', async (req, res) => {
-	try {
-		let arrPageThreeDays = [];
-		for (let minusDate = 0; minusDate < 3; minusDate++) {
-			console.log({ minusDate });
-
-			const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
-			console.log({ date });
-			const client = request(req.app);
-			let [torrentP] = await Promise.all([client.get(`/torrent?date=${date}`)]);
-
-			arrPageThreeDays.push(JSON.parse(torrentP.text).length);
-		}
-
-		return res.status(200).json(arrPageThreeDays);
-	} catch (e) {
-		return res.status(200).json([]);
-	}
-});
-
 app.get('*', function (req, res) {
 	return res.status(200).json([]);
 });
