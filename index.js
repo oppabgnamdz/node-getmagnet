@@ -229,6 +229,7 @@ app.get('/special', async (req, res) => {
 		if (isNaN(minusDate)) {
 			return res.status(200).json([]);
 		}
+
 		const side = req.query.date.split(',')[1];
 		const page = req.query.date.split(',')[2];
 		const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
@@ -237,22 +238,45 @@ app.get('/special', async (req, res) => {
 		const crawlPages = async (baseUrl, start, end) => {
 			const linkMap = new Map();
 
-			for (let j = start; j < end; j++) {
-				const pageUrl = `${baseUrl}/${formattedDate}?page=${j + 1}`;
+			// If specific page requested, only process that page
+			if (page) {
+				const pageUrl = `${baseUrl}/${formattedDate}?page=${page}`;
 				const html = await fetchPage(pageUrl);
-				if (!html) continue;
 
-				const $ = cheerio.load(html);
-				const links = $('a[href*="/download/"]')
-					.map((_, el) => $(el).attr('href'))
-					.get();
+				if (html) {
+					const $ = cheerio.load(html);
+					const links = $('a[href*="/download/"]')
+						.map((_, el) => $(el).attr('href'))
+						.get();
 
-				if (links.length === 0) break;
+					links.forEach((link) => {
+						const code = link.split('/').pop().split('.')[0];
+						linkMap.set(code, link);
+					});
+				}
+			} else {
+				// Process all pages sequentially
+				for (let j = start; j < end; j++) {
+					const pageUrl = `${baseUrl}/${formattedDate}?page=${j + 1}`;
+					const html = await fetchPage(pageUrl);
 
-				links.forEach((link) => {
-					const code = link.split('/').pop().split('.')[0];
-					linkMap.set(code, link);
-				});
+					if (!html) continue;
+
+					const $ = cheerio.load(html);
+					const links = $('a[href*="/download/"]')
+						.map((_, el) => $(el).attr('href'))
+						.get();
+
+					if (links.length === 0) break;
+
+					links.forEach((link) => {
+						const code = link.split('/').pop().split('.')[0];
+						linkMap.set(code, link);
+					});
+
+					// Add delay between pages
+					await new Promise((resolve) => setTimeout(resolve, 1000));
+				}
 			}
 
 			const uniqueLinks = Array.from(linkMap.values());
@@ -260,12 +284,13 @@ app.get('/special', async (req, res) => {
 		};
 
 		const baseUrl = side === 'j' ? BASE_URL : BASE_URL_P;
-		const start = page ? parseInt(page) - 1 : 0;
-		const end = page ? parseInt(page) : 200;
+		const start = 0;
+		const end = 200;
 
 		const torrents = await crawlPages(baseUrl, start, end);
 		return res.status(200).json(torrents);
 	} catch (e) {
+		console.error('Error in /special endpoint:', e);
 		return res.status(200).json([]);
 	}
 });
