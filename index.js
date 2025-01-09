@@ -48,6 +48,49 @@ app.get('/', async (req, res) => {
 	}
 });
 
+app.get('/getcode/:id', async (req, res) => {
+    try {
+        const code = req.params.id;
+        const url = `https://missav123.com/vi/${code}`;
+
+        // Fetch the webpage
+        const response = await axios.get(url, {
+            headers: {
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            }
+        });
+
+        // Parse the HTML content
+        const $ = cheerio.load(response.data);
+
+        // Look for JavaScript content
+        const scripts = $('script').map((i, el) => $(el).html()).get();
+        
+        // Find the script containing the identifier pattern
+        let identifier = '';
+        for (const script of scripts) {
+            if (script && script.includes('5f9154ff')) {
+                const matches = script.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/);
+                if (matches && matches[0]) {
+                    identifier = matches[0];
+                    break;
+                }
+            }
+        }
+
+        if (identifier) {
+            res.json({ identifier });
+        } else {
+            res.status(404).json({ error: 'Identifier not found' });
+        }
+
+    } catch (error) {
+        console.error('Error:', error);
+        res.status(500).json({ error: 'Failed to fetch or parse the webpage' });
+    }
+});
+
+
 app.get('/torrent', async (req, res) => {
 	try {
 		const date =
