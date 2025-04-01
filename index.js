@@ -293,7 +293,7 @@ app.get(`/crypto-json`, async (req, res) => {
 			},
 			{
 				id: 'bitcoin',
-				threshold: 85000,
+				threshold: 84500,
 				type: 'above',
 				name: 'Bitcoin',
 			},
