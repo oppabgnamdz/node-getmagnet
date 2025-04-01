@@ -299,13 +299,13 @@ app.get(`/crypto-json`, async (req, res) => {
 			},
 			{
 				id: 'ethereum',
-				threshold: 1900,
+				threshold: 2000,
 				type: 'below',
 				name: 'Ethereum',
 			},
 			{
 				id: 'ethereum',
-				threshold: 2000,
+				threshold: 2100,
 				type: 'above',
 				name: 'Ethereum',
 			},
