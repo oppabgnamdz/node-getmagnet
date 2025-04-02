@@ -17,13 +17,40 @@ var path = require('path');
 const app = express();
 const { throttle } = require('lodash');
 const cheerio = require('cheerio');
+const { MongoClient } = require('mongodb');
 app.use(cors());
+
+// MongoDB connection string
+const MONGO_URI =
+	'mongodb+srv://nhnobnd:Dunghoi1@cluster0.uha2oe3.mongodb.net/';
+const DB_NAME = 'magnet-db';
+const COLLECTION_NAME = 'magnets';
+
+// MongoDB client
+let mongoClient = null;
+
+// Connect to MongoDB
+async function connectToMongo() {
+	if (mongoClient) return mongoClient;
+
+	try {
+		mongoClient = new MongoClient(MONGO_URI);
+		await mongoClient.connect();
+		console.log('Connected to MongoDB');
+		return mongoClient;
+	} catch (error) {
+		console.error('MongoDB connection error:', error);
+		throw error;
+	}
+}
 
 const BASE_URL = 'https://www.141jav.com/date';
 const BASE_URL_P = 'https://www.141ppv.com/date';
 
-const fetchPage = throttle(async (url) => {
+// Gỡ bỏ throttle để kiểm soát tốc độ thủ công thông qua delay
+const fetchPage = async (url) => {
 	try {
+		console.log(`Đang gọi API đến: ${url}`);
 		const response = await axios.get(url, {
 			headers: {
 				'User-Agent':
@@ -32,12 +59,25 @@ const fetchPage = throttle(async (url) => {
 			timeout: 30000,
 		});
 
+		console.log(`Nhận phản hồi thành công từ: ${url}`);
 		return response.data;
 	} catch (error) {
-		console.error(`Error fetching ${url}:`, error.message);
+		console.error(`Lỗi khi tải ${url}:`, error.message);
+
+		// Thêm xử lý cho các loại lỗi
+		if (error.response) {
+			// Phản hồi từ server với mã lỗi (4xx, 5xx)
+			console.error(
+				`Mã lỗi: ${error.response.status}, Dữ liệu: ${JSON.stringify(error.response.data)}`
+			);
+		} else if (error.request) {
+			// Đã gửi request nhưng không nhận được phản hồi
+			console.error('Không nhận được phản hồi từ server');
+		}
+
 		return null;
 	}
-}, 1000);
+};
 
 //test
 app.get('/', async (req, res) => {
@@ -297,7 +337,7 @@ app.get(`/crypto-json`, async (req, res) => {
 				type: 'above',
 				name: 'Bitcoin',
 			},
-		
+
 			{
 				id: 'ethereum',
 				threshold: 2100,
@@ -377,6 +417,163 @@ app.get('/special', async (req, res) => {
 		return res.status(200).json([]);
 	}
 });
+
+// Function to crawl pages from both URLs
+const crawlPages = async (baseUrl, date) => {
+	try {
+		const linkMap = new Map();
+		const baseWithoutDate = baseUrl.replace('/date', '');
+		const formattedDate = moment(date).format('YYYY/MM/DD');
+
+		// Điều chỉnh thời gian chờ nhanh hơn
+		for (let j = 0; j < 5; j++) {
+			const pageUrl = `${baseUrl}/${formattedDate}?page=${j + 1}`;
+			console.log(
+				`Đang tải trang ${j + 1} từ ${baseUrl} cho ngày ${formattedDate}`
+			);
+
+			// Thêm thời gian chờ trước khi tải trang - giảm xuống 1 giây
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+
+			const html = await fetchPage(pageUrl);
+
+			if (!html) {
+				console.log(`Không thể tải trang ${pageUrl}`);
+				continue;
+			}
+
+			const $ = cheerio.load(html);
+			const links = $('a[href*="/download/"]')
+				.map((_, el) => $(el).attr('href'))
+				.get();
+
+			console.log(`Tìm thấy ${links.length} links từ trang ${j + 1}`);
+
+			if (links.length === 0) {
+				console.log(
+					`Không tìm thấy links, dừng tìm kiếm cho ${baseUrl} ngày ${formattedDate}`
+				);
+				break;
+			}
+
+			links.forEach((link) => {
+				const code = link.split('/').pop().split('.')[0];
+				linkMap.set(code, link);
+			});
+
+			// Tăng thời gian chờ giữa các trang - giảm xuống 3 giây
+			console.log(`Chờ 3 giây trước khi tải trang tiếp theo...`);
+			await new Promise((resolve) => setTimeout(resolve, 3000));
+		}
+
+		const uniqueLinks = Array.from(linkMap.values());
+		console.log(
+			`Tổng cộng ${uniqueLinks.length} links duy nhất từ ${baseUrl} cho ngày ${date}`
+		);
+
+		return uniqueLinks.map((link) => {
+			const code = link.split('/').pop().split('.')[0];
+			return {
+				url: `${baseWithoutDate}${link}`,
+				code: code,
+				source: baseUrl === BASE_URL ? 'jav' : 'ppv',
+				date: date,
+			};
+		});
+	} catch (error) {
+		console.error(`Lỗi khi crawl ${baseUrl} cho ngày ${date}:`, error);
+		return [];
+	}
+};
+
+// Get magnets from both sites for the last 3 days
+app.get('/get-all', async (req, res) => {
+	try {
+		// Connect to MongoDB
+		const client = await connectToMongo();
+		const db = client.db(DB_NAME);
+		const collection = db.collection(COLLECTION_NAME);
+
+		// Get dates for today, yesterday, and the day before
+		const dates = [
+			moment().format('YYYY-MM-DD'),
+			moment().subtract(1, 'days').format('YYYY-MM-DD'),
+			moment().subtract(2, 'days').format('YYYY-MM-DD'),
+		];
+
+		console.log('Bắt đầu crawl dữ liệu cho các ngày:', dates);
+
+		let allMagnets = [];
+		let newMagnets = [];
+
+		// Crawl tuần tự và xử lý từng ngày
+		for (const date of dates) {
+			console.log(`\n==== Đang xử lý ngày: ${date} ====`);
+
+			// Xử lý tuần tự từng trang để tránh quá tải
+			console.log(`\n-- Crawl từ ${BASE_URL} cho ngày ${date} --`);
+			const javMagnets = await crawlPages(BASE_URL, date);
+
+			// Giảm thời gian chờ xuống còn 3 giây
+			console.log(`\nChờ 3 giây trước khi crawl trang tiếp theo...`);
+			await new Promise((resolve) => setTimeout(resolve, 3000));
+
+			console.log(`\n-- Crawl từ ${BASE_URL_P} cho ngày ${date} --`);
+			const ppvMagnets = await crawlPages(BASE_URL_P, date);
+
+			console.log(
+				`\nĐã tìm thấy ${javMagnets.length} links từ JAV và ${ppvMagnets.length} links từ PPV cho ngày ${date}`
+			);
+
+			// Kết hợp kết quả
+			const combinedMagnets = [...javMagnets, ...ppvMagnets];
+			allMagnets = [...allMagnets, ...combinedMagnets];
+
+			// Giảm thời gian chờ giữa các ngày xuống còn 3 giây
+			if (date !== dates[dates.length - 1]) {
+				console.log(`\nChờ 3 giây trước khi xử lý ngày tiếp theo...`);
+				await new Promise((resolve) => setTimeout(resolve, 3000));
+			}
+		}
+
+		console.log(
+			`\n==== Tổng cộng đã thu thập được ${allMagnets.length} links ====`
+		);
+		console.log(`\nBắt đầu kiểm tra và thêm vào MongoDB...`);
+
+		// Check for existing magnets and insert new ones
+		let processedCount = 0;
+		for (const magnet of allMagnets) {
+			processedCount++;
+			if (processedCount % 20 === 0) {
+				console.log(`Đã xử lý ${processedCount}/${allMagnets.length} links`);
+			}
+
+			const exists = await collection.findOne({
+				code: magnet.code,
+				source: magnet.source,
+			});
+
+			if (!exists) {
+				await collection.insertOne({
+					...magnet,
+					created_at: new Date(),
+				});
+				newMagnets.push(magnet);
+			}
+		}
+
+		console.log(
+			`\n==== Hoàn thành! Đã thêm ${newMagnets.length} links mới vào MongoDB ====`
+		);
+
+		return res.status(200).json(newMagnets);
+	} catch (error) {
+		console.error('Error in /get-all endpoint:', error);
+		return res.status(500).json({ error: error.message });
+	}
+});
+
 app.get('*', function (req, res) {
 	return res.status(200).json([]);
 });
@@ -390,9 +587,27 @@ const renderFile = (res, date, side) => {
 	res.setHeader('Content-Type', 'application/octet-stream');
 };
 
-app.listen(process.env.PORT, () =>
-	console.log('Example app listening on port 3000!')
-);
+// Initialize MongoDB connection when starting the server
+connectToMongo()
+	.then(() => {
+		app.listen(process.env.PORT || 3000, () =>
+			console.log(`Example app listening on port ${process.env.PORT || 3000}!`)
+		);
+	})
+	.catch((err) => {
+		console.error('Failed to connect to MongoDB on startup', err);
+		process.exit(1);
+	});
+
+// Close MongoDB connection when app is terminating
+process.on('SIGINT', async () => {
+	if (mongoClient) {
+		await mongoClient.close();
+		console.log('MongoDB connection closed');
+	}
+	process.exit(0);
+});
+
 process.on('uncaughtException', (err) => {
 	console.log({ err });
 	process.exit();
