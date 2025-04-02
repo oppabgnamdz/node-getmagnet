@@ -567,7 +567,9 @@ app.get('/get-all', async (req, res) => {
 			`\n==== Hoàn thành! Đã thêm ${newMagnets.length} links mới vào MongoDB ====`
 		);
 
-		return res.status(200).json(newMagnets);
+		// Chỉ trả về mảng các URL từ newMagnets
+		const urls = newMagnets.map((magnet) => magnet.url);
+		return res.status(200).json(urls);
 	} catch (error) {
 		console.error('Error in /get-all endpoint:', error);
 		return res.status(500).json({ error: error.message });
