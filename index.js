@@ -148,9 +148,11 @@ app.get('/missav/:name', async (req, res) => {
 			args: [
 				'--no-sandbox',
 				'--disable-setuid-sandbox',
-				'--disable-web-security',
-				'--disable-features=IsolateOrigins,site-per-process',
 				'--disable-dev-shm-usage',
+				'--disable-gpu',
+				'--disable-software-rasterizer',
+				'--disable-features=IsolateOrigins,site-per-process',
+				'--disable-web-security',
 			],
 		});
 
