@@ -142,7 +142,7 @@ app.get('/missav/:name', async (req, res) => {
 		const url = `https://missav123.com/vi/${name}`;
 		console.log(`Đang truy cập: ${url} bằng Puppeteer...`);
 
-		// Khởi chạy trình duyệt headless
+		// Cố gắng chạy trực tiếp mà không cần chỉ định executablePath
 		browser = await puppeteer.launch({
 			headless: true,
 			args: [
@@ -150,7 +150,6 @@ app.get('/missav/:name', async (req, res) => {
 				'--disable-setuid-sandbox',
 				'--disable-dev-shm-usage',
 				'--disable-gpu',
-				'--disable-software-rasterizer',
 				'--disable-features=IsolateOrigins,site-per-process',
 				'--disable-web-security',
 			],
@@ -263,7 +262,7 @@ app.get('/missav/:name', async (req, res) => {
 			message: 'Không thể tìm thấy URL m3u8 trong nội dung trang',
 		});
 	} catch (error) {
-		console.error('Lỗi:', error.message);
+		console.error('Lỗi Puppeteer:', error.message);
 
 		if (browser) {
 			try {
@@ -273,12 +272,120 @@ app.get('/missav/:name', async (req, res) => {
 			}
 		}
 
-		res.status(500).json({
-			error: 'Failed to fetch page with Puppeteer',
-			message: error.message,
-		});
+		// Nếu Puppeteer gặp lỗi, thử dùng axios với name từ params
+		try {
+			const name = req.params.name; // Lấy name từ params
+			console.log(`Chuyển sang sử dụng axios cho: ${name}`);
+			return await getMissavWithAxios(req, res, name);
+		} catch (axiosError) {
+			console.error('Lỗi khi dùng axios:', axiosError.message);
+			res.status(500).json({
+				error: 'Failed to fetch page',
+				message: error.message,
+			});
+		}
 	}
 });
+
+// Phương án dự phòng sử dụng axios thay vì puppeteer
+async function getMissavWithAxios(req, res, nameParam) {
+	try {
+		const name = nameParam || req.params.name; // Sử dụng tham số hoặc lấy từ req.params
+		const url = `https://missav123.com/vi/${name}`;
+		console.log(`Đang truy cập: ${url} bằng axios...`);
+
+		// Fetch the webpage
+		const response = await axios.get(url, {
+			headers: {
+				'User-Agent':
+					'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+				Accept:
+					'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+				'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+				'Accept-Encoding': 'gzip, deflate, br',
+				'Cache-Control': 'max-age=0',
+				Referer: 'https://missav123.com/',
+				'sec-ch-ua':
+					'"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+				'sec-ch-ua-mobile': '?0',
+				'sec-ch-ua-platform': '"Windows"',
+				'sec-fetch-dest': 'document',
+				'sec-fetch-mode': 'navigate',
+				'sec-fetch-site': 'none',
+				'sec-fetch-user': '?1',
+				'Upgrade-Insecure-Requests': '1',
+			},
+			timeout: 60000,
+		});
+
+		// Tìm mẫu chuỗi đặc biệt trong HTML
+		const pageContent = response.data;
+		const patternMatch = pageContent.match(
+			/m3u8\|([0-9a-f]+)\|([0-9a-f]+)\|([0-9a-f]+)\|([0-9a-f]+)\|([0-9a-f]+)\|com\|surrit\|https/
+		);
+
+		if (patternMatch) {
+			// Trích xuất các phần UUID
+			const uuid1 = patternMatch[1]; // 1bc761c36b2e
+			const uuid2 = patternMatch[2]; // 97c9
+			const uuid3 = patternMatch[3]; // 4016
+			const uuid4 = patternMatch[4]; // e63a
+			const uuid5 = patternMatch[5]; // ecc60b41
+
+			// Tạo UUID định dạng chuẩn
+			const fullUuid = `${uuid5}-${uuid4}-${uuid3}-${uuid2}-${uuid1}`;
+			const m3u8Url = `https://surrit.com/${fullUuid}/720p/video.m3u8`;
+
+			console.log(`Đã tạo được URL m3u8 với axios: ${m3u8Url}`);
+			return res.json({ m3u8Url });
+		}
+
+		// Parse the HTML content
+		const $ = cheerio.load(pageContent);
+
+		// Tìm URL m3u8 trong script
+		let m3u8Url = '';
+		const scripts = $('script')
+			.map((i, el) => $(el).html())
+			.get();
+
+		for (const script of scripts) {
+			if (!script) continue;
+
+			if (script.includes('.m3u8')) {
+				const matches = script.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
+				if (matches && matches.length > 0) {
+					m3u8Url = matches[0];
+					break;
+				}
+			}
+		}
+
+		if (m3u8Url) {
+			console.log(`Tìm thấy URL m3u8 với axios: ${m3u8Url}`);
+			return res.json({ m3u8Url });
+		}
+
+		// Nếu không tìm thấy mẫu, thử tìm UUID trực tiếp
+		const uuidMatches = pageContent.match(
+			/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+		);
+		if (uuidMatches && uuidMatches.length > 0) {
+			const possibleUrl = `https://surrit.com/${uuidMatches[0]}/720p/video.m3u8`;
+			console.log(`Tìm thấy UUID, tạo URL m3u8: ${possibleUrl}`);
+			return res.json({ m3u8Url: possibleUrl });
+		}
+
+		// Không tìm thấy thông tin UUID
+		return res.status(404).json({
+			error: 'M3U8 URL not found',
+			message: 'Không thể tìm thấy URL m3u8 trong nội dung trang',
+		});
+	} catch (error) {
+		console.error('Lỗi axios:', error.message);
+		throw error;
+	}
+}
 
 app.get('/torrent', async (req, res) => {
 	try {
