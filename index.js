@@ -197,7 +197,7 @@ app.get('/missav/:name', async (req, res) => {
 
 			// Tìm mẫu chuỗi đặc biệt
 			const patternStr = document.body.innerHTML.match(
-				/m3u8\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|com\|surrit\|https/g
+				/m3u8\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|com\|surrit\|https/g
 			);
 
 			// Tìm mẫu chuỗi video format
@@ -687,52 +687,103 @@ app.get('/special', async (req, res) => {
 	}
 });
 
-// Function to crawl pages from both URLs
+// Function to crawl pages from both URLs using Puppeteer
 const crawlPages = async (baseUrl, date) => {
 	try {
-		const linkMap = new Map();
 		const baseWithoutDate = baseUrl.replace('/date', '');
 		const formattedDate = moment(date).format('YYYY/MM/DD');
 
-		// Điều chỉnh thời gian chờ nhanh hơn
-		for (let j = 0; j < 5; j++) {
-			const pageUrl = `${baseUrl}/${formattedDate}?page=${j + 1}`;
+		let browser = null;
+		let linkMap = new Map();
+
+		try {
 			console.log(
-				`Đang tải trang ${j + 1} từ ${baseUrl} cho ngày ${formattedDate}`
+				`Đang khởi tạo Puppeteer cho ${baseUrl} ngày ${formattedDate}...`
 			);
 
-			// Thêm thời gian chờ trước khi tải trang - giảm xuống 1 giây
-			await new Promise((resolve) => setTimeout(resolve, 1000));
-
-			const html = await fetchPage(pageUrl);
-
-			if (!html) {
-				console.log(`Không thể tải trang ${pageUrl}`);
-				continue;
-			}
-
-			const $ = cheerio.load(html);
-			const links = $('a[href*="/download/"]')
-				.map((_, el) => $(el).attr('href'))
-				.get();
-
-			console.log(`Tìm thấy ${links.length} links từ trang ${j + 1}`);
-
-			if (links.length === 0) {
-				console.log(
-					`Không tìm thấy links, dừng tìm kiếm cho ${baseUrl} ngày ${formattedDate}`
-				);
-				break;
-			}
-
-			links.forEach((link) => {
-				const code = link.split('/').pop().split('.')[0];
-				linkMap.set(code, link);
+			browser = await puppeteer.launch({
+				headless: true,
+				args: [
+					'--no-sandbox',
+					'--disable-setuid-sandbox',
+					'--disable-dev-shm-usage',
+					'--disable-gpu',
+					'--disable-features=IsolateOrigins,site-per-process',
+					'--disable-web-security',
+				],
 			});
 
-			// Tăng thời gian chờ giữa các trang - giảm xuống 3 giây
-			console.log(`Chờ 3 giây trước khi tải trang tiếp theo...`);
-			await new Promise((resolve) => setTimeout(resolve, 3000));
+			// Sử dụng vòng lặp vô hạn và dừng khi không tìm thấy link nào
+			let pageNumber = 1;
+			let shouldContinue = true;
+
+			while (shouldContinue) {
+				const pageUrl = `${baseUrl}/${formattedDate}?page=${pageNumber}`;
+				console.log(
+					`Đang tải trang ${pageNumber} từ ${baseUrl} cho ngày ${formattedDate}`
+				);
+
+				const page = await browser.newPage();
+
+				// Cấu hình trình duyệt giống người dùng thật
+				await page.setUserAgent(
+					'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+				);
+				await page.setViewport({ width: 1920, height: 1080 });
+
+				// Thiết lập các headers
+				await page.setExtraHTTPHeaders({
+					'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+				});
+
+				try {
+					// Mở trang web và đợi nó tải xong
+					await page.goto(pageUrl, {
+						waitUntil: 'networkidle2',
+						timeout: 60000,
+					});
+
+					// Thực thi JavaScript trong trang để tìm các link tải xuống
+					const links = await page.evaluate(() => {
+						return Array.from(
+							document.querySelectorAll('a[href*="/download/"]')
+						).map((link) => link.getAttribute('href'));
+					});
+
+					console.log(`Tìm thấy ${links.length} links từ trang ${pageNumber}`);
+
+					// Nếu không còn links nào, dừng vòng lặp
+					if (links.length === 0) {
+						console.log(
+							`Không tìm thấy links, dừng tìm kiếm cho ${baseUrl} ngày ${formattedDate}`
+						);
+						await page.close();
+						shouldContinue = false;
+						break;
+					}
+
+					links.forEach((link) => {
+						const code = link.split('/').pop().split('.')[0];
+						linkMap.set(code, link);
+					});
+
+					await page.close();
+					pageNumber++;
+
+					// Giảm thời gian chờ giữa các trang từ 3s xuống 1.5s
+					console.log(`Chờ 1.5 giây trước khi tải trang tiếp theo...`);
+					await new Promise((resolve) => setTimeout(resolve, 1500));
+				} catch (pageError) {
+					console.error(`Lỗi khi tải trang ${pageUrl}:`, pageError.message);
+					await page.close();
+					shouldContinue = false;
+				}
+			}
+		} finally {
+			if (browser) {
+				console.log(`Đóng trình duyệt Puppeteer cho ${baseUrl}`);
+				await browser.close();
+			}
 		}
 
 		const uniqueLinks = Array.from(linkMap.values());
@@ -757,6 +808,7 @@ const crawlPages = async (baseUrl, date) => {
 
 // Get magnets from both sites for the last 3 days
 app.get('/get-all', async (req, res) => {
+	let browser = null;
 	try {
 		// Connect to MongoDB
 		const client = await connectToMongo();
@@ -783,9 +835,9 @@ app.get('/get-all', async (req, res) => {
 			console.log(`\n-- Crawl từ ${BASE_URL} cho ngày ${date} --`);
 			const javMagnets = await crawlPages(BASE_URL, date);
 
-			// Giảm thời gian chờ xuống còn 3 giây
-			console.log(`\nChờ 3 giây trước khi crawl trang tiếp theo...`);
-			await new Promise((resolve) => setTimeout(resolve, 3000));
+			// Giảm thời gian chờ xuống còn 1.5 giây
+			console.log(`\nChờ 1.5 giây trước khi crawl trang tiếp theo...`);
+			await new Promise((resolve) => setTimeout(resolve, 1500));
 
 			console.log(`\n-- Crawl từ ${BASE_URL_P} cho ngày ${date} --`);
 			const ppvMagnets = await crawlPages(BASE_URL_P, date);
@@ -798,10 +850,10 @@ app.get('/get-all', async (req, res) => {
 			const combinedMagnets = [...javMagnets, ...ppvMagnets];
 			allMagnets = [...allMagnets, ...combinedMagnets];
 
-			// Giảm thời gian chờ giữa các ngày xuống còn 3 giây
+			// Giảm thời gian chờ giữa các ngày xuống còn 1.5 giây
 			if (date !== dates[dates.length - 1]) {
-				console.log(`\nChờ 3 giây trước khi xử lý ngày tiếp theo...`);
-				await new Promise((resolve) => setTimeout(resolve, 3000));
+				console.log(`\nChờ 1.5 giây trước khi xử lý ngày tiếp theo...`);
+				await new Promise((resolve) => setTimeout(resolve, 1500));
 			}
 		}
 
