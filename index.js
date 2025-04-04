@@ -18,6 +18,7 @@ const app = express();
 const { throttle } = require('lodash');
 const cheerio = require('cheerio');
 const { MongoClient } = require('mongodb');
+const puppeteer = require('puppeteer');
 app.use(cors());
 
 // MongoDB connection string
@@ -131,6 +132,149 @@ app.get('/getcode/:id', async (req, res) => {
 	} catch (error) {
 		console.error('Error:', error);
 		res.status(500).json({ error: 'Failed to fetch or parse the webpage' });
+	}
+});
+
+app.get('/missav/:name', async (req, res) => {
+	let browser = null;
+	try {
+		const name = req.params.name;
+		const url = `https://missav123.com/vi/${name}`;
+		console.log(`Đang truy cập: ${url} bằng Puppeteer...`);
+
+		// Khởi chạy trình duyệt headless
+		browser = await puppeteer.launch({
+			headless: true,
+			args: [
+				'--no-sandbox',
+				'--disable-setuid-sandbox',
+				'--disable-web-security',
+				'--disable-features=IsolateOrigins,site-per-process',
+				'--disable-dev-shm-usage',
+			],
+		});
+
+		const page = await browser.newPage();
+
+		// Cấu hình trình duyệt giống người dùng thật
+		await page.setUserAgent(
+			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+		);
+		await page.setViewport({ width: 1920, height: 1080 });
+
+		// Thiết lập các headers
+		await page.setExtraHTTPHeaders({
+			'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+		});
+
+		// Mở trang web và đợi nó tải xong
+		await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+		// Thay thế waitForTimeout bằng delay tương đương
+		await new Promise((resolve) => setTimeout(resolve, 5000));
+
+		// Lấy nội dung trang
+		const pageContent = await page.content();
+
+		// Thực thi JavaScript trong trang để tìm m3u8 và mẫu của surrit
+		const findM3u8 = await page.evaluate(() => {
+			// Tìm trong tất cả script tags
+			const scripts = Array.from(document.querySelectorAll('script'));
+			let m3u8Urls = [];
+
+			// Tìm URL m3u8 trong các scripts
+			for (const script of scripts) {
+				const text = script.textContent || '';
+				const matches = text.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
+				if (matches) m3u8Urls = [...m3u8Urls, ...matches];
+			}
+
+			// Tìm UUID
+			const uuidMatches = document.body.innerHTML.match(
+				/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+			);
+
+			// Tìm mẫu chuỗi đặc biệt
+			const patternStr = document.body.innerHTML.match(
+				/m3u8\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|com\|surrit\|https/g
+			);
+
+			return {
+				m3u8Urls,
+				uuidMatches: uuidMatches || [],
+				patternStr: patternStr || [],
+			};
+		});
+
+		// Đóng trình duyệt khi xong
+		await browser.close();
+		browser = null;
+
+		// Thử xây dựng URL từ mẫu chuỗi đặc biệt
+		if (findM3u8.patternStr.length > 0) {
+			console.log(`Tìm thấy mẫu chuỗi đặc biệt: ${findM3u8.patternStr[0]}`);
+
+			// Phân tích chuỗi: m3u8|1bc761c36b2e|97c9|4016|e63a|ecc60b41|com|surrit|https
+			const parts = findM3u8.patternStr[0].split('|');
+
+			if (parts.length >= 9) {
+				// Trích xuất các phần tương ứng
+				const uuid5 = parts[5]; // ecc60b41
+				const uuid4 = parts[4]; // e63a
+				const uuid3 = parts[3]; // 4016
+				const uuid2 = parts[2]; // 97c9
+				const uuid1 = parts[1]; // 1bc761c36b2e
+
+				// Tạo UUID theo định dạng chuẩn
+				const fullUuid = `${uuid5}-${uuid4}-${uuid3}-${uuid2}-${uuid1}`;
+				const m3u8Url = `https://surrit.com/${fullUuid}/720p/video.m3u8`;
+
+				console.log(`Đã tạo được URL m3u8: ${m3u8Url}`);
+				return res.json({ m3u8Url: m3u8Url });
+			}
+		}
+
+		// Nếu không tìm thấy mẫu chuỗi đặc biệt, thử các phương pháp khác
+		if (findM3u8.m3u8Urls.length > 0) {
+			console.log(`Tìm thấy ${findM3u8.m3u8Urls.length} URLs m3u8`);
+			return res.json({ m3u8Url: findM3u8.m3u8Urls[0] });
+		}
+
+		if (findM3u8.uuidMatches.length > 0) {
+			console.log(`Tìm thấy ${findM3u8.uuidMatches.length} UUIDs`);
+
+			// Tạo các URL m3u8 có thể có từ UUIDs
+			const possibleUrls = findM3u8.uuidMatches
+				.slice(0, 3)
+				.map((uuid) => `https://surrit.com/${uuid}/720p/video.m3u8`);
+
+			return res.json({
+				m3u8Url: possibleUrls[0],
+				uuids: findM3u8.uuidMatches.slice(0, 5),
+				possibleUrls,
+			});
+		}
+
+		// Nếu không tìm thấy
+		return res.status(404).json({
+			error: 'M3U8 URL not found',
+			message: 'Không thể tìm thấy URL m3u8 trong nội dung trang',
+		});
+	} catch (error) {
+		console.error('Lỗi:', error.message);
+
+		if (browser) {
+			try {
+				await browser.close();
+			} catch (e) {
+				console.error('Lỗi khi đóng trình duyệt:', e);
+			}
+		}
+
+		res.status(500).json({
+			error: 'Failed to fetch page with Puppeteer',
+			message: error.message,
+		});
 	}
 });
 
