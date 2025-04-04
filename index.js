@@ -200,10 +200,18 @@ app.get('/missav/:name', async (req, res) => {
 				/m3u8\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|com\|surrit\|https/g
 			);
 
+			// Tìm mẫu chuỗi video format
+			const videoFormatPattern = document.body.innerHTML.match(
+				/https\|video\|(1280x720|720p)/g
+			);
+
 			return {
 				m3u8Urls,
 				uuidMatches: uuidMatches || [],
 				patternStr: patternStr || [],
+				videoFormat: videoFormatPattern
+					? videoFormatPattern[0].split('|')[2]
+					: null,
 			};
 		});
 
@@ -228,7 +236,10 @@ app.get('/missav/:name', async (req, res) => {
 
 				// Tạo UUID theo định dạng chuẩn
 				const fullUuid = `${uuid5}-${uuid4}-${uuid3}-${uuid2}-${uuid1}`;
-				const m3u8Url = `https://surrit.com/${fullUuid}/720p/video.m3u8`;
+
+				// Sử dụng định dạng video thích hợp nếu tìm thấy
+				const videoFormat = findM3u8.videoFormat || '720p';
+				const m3u8Url = `https://surrit.com/${fullUuid}/${videoFormat}/video.m3u8`;
 
 				console.log(`Đã tạo được URL m3u8: ${m3u8Url}`);
 				return res.json({ m3u8Url: m3u8Url });
@@ -245,9 +256,10 @@ app.get('/missav/:name', async (req, res) => {
 			console.log(`Tìm thấy ${findM3u8.uuidMatches.length} UUIDs`);
 
 			// Tạo các URL m3u8 có thể có từ UUIDs
+			const videoFormat = findM3u8.videoFormat || '720p';
 			const possibleUrls = findM3u8.uuidMatches
 				.slice(0, 3)
-				.map((uuid) => `https://surrit.com/${uuid}/720p/video.m3u8`);
+				.map((uuid) => `https://surrit.com/${uuid}/${videoFormat}/video.m3u8`);
 
 			return res.json({
 				m3u8Url: possibleUrls[0],
@@ -324,6 +336,10 @@ async function getMissavWithAxios(req, res, nameParam) {
 			/m3u8\|([0-9a-f]+)\|([0-9a-f]+)\|([0-9a-f]+)\|([0-9a-f]+)\|([0-9a-f]+)\|com\|surrit\|https/
 		);
 
+		// Tìm mẫu chuỗi video format
+		const videoFormatMatch = pageContent.match(/https\|video\|(1280x720|720p)/);
+		const videoFormat = videoFormatMatch ? videoFormatMatch[1] : '720p';
+
 		if (patternMatch) {
 			// Trích xuất các phần UUID
 			const uuid1 = patternMatch[1]; // 1bc761c36b2e
@@ -334,7 +350,7 @@ async function getMissavWithAxios(req, res, nameParam) {
 
 			// Tạo UUID định dạng chuẩn
 			const fullUuid = `${uuid5}-${uuid4}-${uuid3}-${uuid2}-${uuid1}`;
-			const m3u8Url = `https://surrit.com/${fullUuid}/720p/video.m3u8`;
+			const m3u8Url = `https://surrit.com/${fullUuid}/${videoFormat}/video.m3u8`;
 
 			console.log(`Đã tạo được URL m3u8 với axios: ${m3u8Url}`);
 			return res.json({ m3u8Url });
@@ -371,7 +387,7 @@ async function getMissavWithAxios(req, res, nameParam) {
 			/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
 		);
 		if (uuidMatches && uuidMatches.length > 0) {
-			const possibleUrl = `https://surrit.com/${uuidMatches[0]}/720p/video.m3u8`;
+			const possibleUrl = `https://surrit.com/${uuidMatches[0]}/${videoFormat}/video.m3u8`;
 			console.log(`Tìm thấy UUID, tạo URL m3u8: ${possibleUrl}`);
 			return res.json({ m3u8Url: possibleUrl });
 		}
