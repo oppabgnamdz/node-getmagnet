@@ -157,6 +157,33 @@ app.get('/missav/:name', async (req, res) => {
 
 		const page = await browser.newPage();
 
+		// Mảng lưu các URLs m3u8 đã phát hiện
+		let m3u8Urls = [];
+
+		// Lắng nghe tất cả các network requests
+		await page.setRequestInterception(true);
+
+		page.on('request', (request) => {
+			const url = request.url();
+			if (url.includes('.m3u8')) {
+				console.log(`Phát hiện m3u8 URL trong request: ${url}`);
+				if (!m3u8Urls.includes(url)) {
+					m3u8Urls.push(url);
+				}
+			}
+			request.continue();
+		});
+
+		page.on('response', async (response) => {
+			const url = response.url();
+			if (url.includes('.m3u8')) {
+				console.log(`Phát hiện m3u8 URL trong response: ${url}`);
+				if (!m3u8Urls.includes(url)) {
+					m3u8Urls.push(url);
+				}
+			}
+		});
+
 		// Cấu hình trình duyệt giống người dùng thật
 		await page.setUserAgent(
 			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -171,108 +198,94 @@ app.get('/missav/:name', async (req, res) => {
 		// Mở trang web và đợi nó tải xong
 		await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
 
-		// Thay thế waitForTimeout bằng delay tương đương
-		await new Promise((resolve) => setTimeout(resolve, 5000));
+		// Đợi thêm thời gian để đảm bảo các video player có thể tải
+		await new Promise((resolve) => setTimeout(resolve, 8000));
 
-		// Lấy nội dung trang
-		const pageContent = await page.content();
+		// Nếu chưa tìm thấy m3u8, thử tìm trong tất cả các frames
+		if (m3u8Urls.length === 0) {
+			// Tìm trong tất cả các frames
+			const frames = page.frames();
+			for (const frame of frames) {
+				try {
+					const frameContent = await frame.content();
+					const matches = frameContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
+					if (matches) {
+						for (const match of matches) {
+							if (!m3u8Urls.includes(match)) {
+								console.log(`Phát hiện m3u8 URL trong frame: ${match}`);
+								m3u8Urls.push(match);
+							}
+						}
+					}
+				} catch (e) {
+					console.log(`Lỗi khi xử lý frame: ${e.message}`);
+				}
+			}
+		}
 
-		// Thực thi JavaScript trong trang để tìm m3u8 và mẫu của surrit
-		const findM3u8 = await page.evaluate(() => {
-			// Tìm trong tất cả script tags
-			const scripts = Array.from(document.querySelectorAll('script'));
-			let m3u8Urls = [];
-
-			// Tìm URL m3u8 trong các scripts
-			for (const script of scripts) {
-				const text = script.textContent || '';
-				const matches = text.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
-				if (matches) m3u8Urls = [...m3u8Urls, ...matches];
+		// Nếu vẫn chưa tìm thấy, tìm trong nội dung trang
+		if (m3u8Urls.length === 0) {
+			const pageContent = await page.content();
+			const matches = pageContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
+			if (matches) {
+				for (const match of matches) {
+					if (!m3u8Urls.includes(match)) {
+						console.log(`Phát hiện m3u8 URL trong HTML: ${match}`);
+						m3u8Urls.push(match);
+					}
+				}
 			}
 
-			// Tìm UUID
-			const uuidMatches = document.body.innerHTML.match(
-				/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
-			);
+			// Thực thi để tìm thông qua API surrit.com nếu cần
+			const surritInfo = await page.evaluate(() => {
+				// Tìm UUID
+				const uuidMatches = document.body.innerHTML.match(
+					/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+				);
 
-			// Tìm mẫu chuỗi đặc biệt
-			const patternStr = document.body.innerHTML.match(
-				/m3u8\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|[0-9a-f]+\|com\|surrit\|https/g
-			);
+				// Tìm mẫu chuỗi video format
+				const videoFormatPattern = document.body.innerHTML.match(
+					/https\|video\|(1280x720|720p)/g
+				);
 
-			// Tìm mẫu chuỗi video format
-			const videoFormatPattern = document.body.innerHTML.match(
-				/https\|video\|(1280x720|720p)/g
-			);
+				return {
+					uuidMatches: uuidMatches || [],
+					videoFormat: videoFormatPattern
+						? videoFormatPattern[0].split('|')[2]
+						: '720p',
+				};
+			});
 
-			return {
-				m3u8Urls,
-				uuidMatches: uuidMatches || [],
-				patternStr: patternStr || [],
-				videoFormat: videoFormatPattern
-					? videoFormatPattern[0].split('|')[2]
-					: null,
-			};
-		});
+			// Nếu tìm thấy UUID, thử tạo URL surrit
+			if (surritInfo.uuidMatches.length > 0) {
+				const uuid = surritInfo.uuidMatches[0];
+				const videoFormat = surritInfo.videoFormat;
+				const surritUrl = `https://surrit.com/${uuid}/${videoFormat}/video.m3u8`;
+
+				console.log(`Tạo m3u8 URL từ UUID: ${surritUrl}`);
+				m3u8Urls.push(surritUrl);
+			}
+		}
 
 		// Đóng trình duyệt khi xong
 		await browser.close();
 		browser = null;
 
-		// Thử xây dựng URL từ mẫu chuỗi đặc biệt
-		if (findM3u8.patternStr.length > 0) {
-			console.log(`Tìm thấy mẫu chuỗi đặc biệt: ${findM3u8.patternStr[0]}`);
-
-			// Phân tích chuỗi: m3u8|1bc761c36b2e|97c9|4016|e63a|ecc60b41|com|surrit|https
-			const parts = findM3u8.patternStr[0].split('|');
-
-			if (parts.length >= 9) {
-				// Trích xuất các phần tương ứng
-				const uuid5 = parts[5]; // ecc60b41
-				const uuid4 = parts[4]; // e63a
-				const uuid3 = parts[3]; // 4016
-				const uuid2 = parts[2]; // 97c9
-				const uuid1 = parts[1]; // 1bc761c36b2e
-
-				// Tạo UUID theo định dạng chuẩn
-				const fullUuid = `${uuid5}-${uuid4}-${uuid3}-${uuid2}-${uuid1}`;
-
-				// Sử dụng định dạng video thích hợp nếu tìm thấy
-				const videoFormat = findM3u8.videoFormat || '720p';
-				const m3u8Url = `https://surrit.com/${fullUuid}/${videoFormat}/video.m3u8`;
-
-				console.log(`Đã tạo được URL m3u8: ${m3u8Url}`);
-				return res.json({ m3u8Url: m3u8Url });
+		// Trả về kết quả
+		if (m3u8Urls.length > 0) {
+			// Ưu tiên URL surrit.com
+			const surritUrl = m3u8Urls.find((url) => url.includes('surrit.com'));
+			if (surritUrl) {
+				return res.json({ m3u8Url: surritUrl });
 			}
+
+			// Nếu không có URL surrit, trả về URL đầu tiên
+			return res.json({ m3u8Url: m3u8Urls[0], allUrls: m3u8Urls });
 		}
 
-		// Nếu không tìm thấy mẫu chuỗi đặc biệt, thử các phương pháp khác
-		if (findM3u8.m3u8Urls.length > 0) {
-			console.log(`Tìm thấy ${findM3u8.m3u8Urls.length} URLs m3u8`);
-			return res.json({ m3u8Url: findM3u8.m3u8Urls[0] });
-		}
-
-		if (findM3u8.uuidMatches.length > 0) {
-			console.log(`Tìm thấy ${findM3u8.uuidMatches.length} UUIDs`);
-
-			// Tạo các URL m3u8 có thể có từ UUIDs
-			const videoFormat = findM3u8.videoFormat || '720p';
-			const possibleUrls = findM3u8.uuidMatches
-				.slice(0, 3)
-				.map((uuid) => `https://surrit.com/${uuid}/${videoFormat}/video.m3u8`);
-
-			return res.json({
-				m3u8Url: possibleUrls[0],
-				uuids: findM3u8.uuidMatches.slice(0, 5),
-				possibleUrls,
-			});
-		}
-
-		// Nếu không tìm thấy
-		return res.status(404).json({
-			error: 'M3U8 URL not found',
-			message: 'Không thể tìm thấy URL m3u8 trong nội dung trang',
-		});
+		// Nếu không tìm thấy, thử dùng axios
+		console.log('Không tìm thấy URL m3u8 với Puppeteer, chuyển sang axios');
+		return await getMissavWithAxios(req, res, name);
 	} catch (error) {
 		console.error('Lỗi Puppeteer:', error.message);
 
@@ -330,37 +343,15 @@ async function getMissavWithAxios(req, res, nameParam) {
 			timeout: 60000,
 		});
 
-		// Tìm mẫu chuỗi đặc biệt trong HTML
+		// Tìm URL m3u8 trực tiếp trong nội dung HTML
 		const pageContent = response.data;
-		const patternMatch = pageContent.match(
-			/m3u8\|([0-9a-f]+)\|([0-9a-f]+)\|([0-9a-f]+)\|([0-9a-f]+)\|([0-9a-f]+)\|com\|surrit\|https/
-		);
+		const m3u8Matches = pageContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g) || [];
 
-		// Tìm mẫu chuỗi video format
-		const videoFormatMatch = pageContent.match(/https\|video\|(1280x720|720p)/);
-		const videoFormat = videoFormatMatch ? videoFormatMatch[1] : '720p';
-
-		if (patternMatch) {
-			// Trích xuất các phần UUID
-			const uuid1 = patternMatch[1]; // 1bc761c36b2e
-			const uuid2 = patternMatch[2]; // 97c9
-			const uuid3 = patternMatch[3]; // 4016
-			const uuid4 = patternMatch[4]; // e63a
-			const uuid5 = patternMatch[5]; // ecc60b41
-
-			// Tạo UUID định dạng chuẩn
-			const fullUuid = `${uuid5}-${uuid4}-${uuid3}-${uuid2}-${uuid1}`;
-			const m3u8Url = `https://surrit.com/${fullUuid}/${videoFormat}/video.m3u8`;
-
-			console.log(`Đã tạo được URL m3u8 với axios: ${m3u8Url}`);
-			return res.json({ m3u8Url });
-		}
-
-		// Parse the HTML content
+		// Parse the HTML content để tìm sâu hơn trong script
 		const $ = cheerio.load(pageContent);
 
 		// Tìm URL m3u8 trong script
-		let m3u8Url = '';
+		let m3u8Urls = [...m3u8Matches]; // Bắt đầu với các URL đã tìm thấy
 		const scripts = $('script')
 			.map((i, el) => $(el).html())
 			.get();
@@ -371,28 +362,79 @@ async function getMissavWithAxios(req, res, nameParam) {
 			if (script.includes('.m3u8')) {
 				const matches = script.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
 				if (matches && matches.length > 0) {
-					m3u8Url = matches[0];
-					break;
+					for (const match of matches) {
+						if (!m3u8Urls.includes(match)) {
+							console.log(`Tìm thấy URL m3u8 trong script: ${match}`);
+							m3u8Urls.push(match);
+						}
+					}
 				}
 			}
 		}
 
-		if (m3u8Url) {
-			console.log(`Tìm thấy URL m3u8 với axios: ${m3u8Url}`);
-			return res.json({ m3u8Url });
+		// Nếu tìm được m3u8 URL, trả về ngay
+		if (m3u8Urls.length > 0) {
+			// Ưu tiên URL từ surrit.com
+			const surritUrl = m3u8Urls.find((url) => url.includes('surrit.com'));
+			if (surritUrl) {
+				console.log(`Trả về URL m3u8 từ surrit.com: ${surritUrl}`);
+				return res.json({ m3u8Url: surritUrl });
+			}
+
+			console.log(`Trả về URL m3u8 đầu tiên: ${m3u8Urls[0]}`);
+			return res.json({ m3u8Url: m3u8Urls[0], allUrls: m3u8Urls });
 		}
 
 		// Nếu không tìm thấy mẫu, thử tìm UUID trực tiếp
-		const uuidMatches = pageContent.match(
-			/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
-		);
+		const uuidMatches =
+			pageContent.match(
+				/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+			) || [];
+
+		// Tìm định dạng video
+		const videoFormatMatch = pageContent.match(/https\|video\|(1280x720|720p)/);
+		const videoFormat = videoFormatMatch ? videoFormatMatch[1] : '720p';
+
 		if (uuidMatches && uuidMatches.length > 0) {
-			const possibleUrl = `https://surrit.com/${uuidMatches[0]}/${videoFormat}/video.m3u8`;
-			console.log(`Tìm thấy UUID, tạo URL m3u8: ${possibleUrl}`);
-			return res.json({ m3u8Url: possibleUrl });
+			// Lọc UUID nghi ngờ là của surrit.com (thường xuất hiện trong script liên quan đến video)
+			let possibleUuids = [];
+
+			// Lấy các UUID xuất hiện gần chuỗi 'surrit', 'video', 'm3u8'
+			for (const uuid of uuidMatches) {
+				const idx = pageContent.indexOf(uuid);
+				const context = pageContent.substring(
+					Math.max(0, idx - 100),
+					Math.min(pageContent.length, idx + 100)
+				);
+
+				if (
+					context.includes('surrit') ||
+					context.includes('video') ||
+					context.includes('m3u8') ||
+					context.includes('hls')
+				) {
+					possibleUuids.push(uuid);
+				}
+			}
+
+			// Nếu không tìm thấy UUID trong ngữ cảnh, sử dụng UUID đầu tiên
+			if (possibleUuids.length === 0) {
+				possibleUuids = [uuidMatches[0]];
+			}
+
+			// Tạo các URL có thể
+			const possibleUrls = possibleUuids.map(
+				(uuid) => `https://surrit.com/${uuid}/${videoFormat}/video.m3u8`
+			);
+
+			console.log(`Tạo các URL m3u8 có thể: ${possibleUrls.join(', ')}`);
+			return res.json({
+				m3u8Url: possibleUrls[0],
+				allUrls: possibleUrls,
+			});
 		}
 
-		// Không tìm thấy thông tin UUID
+		// Không tìm thấy thông tin để tạo URL
 		return res.status(404).json({
 			error: 'M3U8 URL not found',
 			message: 'Không thể tìm thấy URL m3u8 trong nội dung trang',
