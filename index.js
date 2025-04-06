@@ -138,7 +138,21 @@ app.get('/getcode/:id', async (req, res) => {
 app.get('/missav/:name', async (req, res) => {
 	let browser = null;
 	try {
-		const name = req.params.name;
+		let name = req.params.name;
+
+		// Kiểm tra và định dạng lại mã code JAV
+		if (!name.includes('-')) {
+			// Tìm vị trí chuyển từ chữ cái sang số
+			const regex = /([a-zA-Z]+)(\d+)/;
+			const match = name.match(regex);
+			if (match) {
+				name = `${match[1]}-${match[2]}`;
+				console.log(
+					`Đã chuyển đổi mã code từ ${req.params.name} thành ${name}`
+				);
+			}
+		}
+
 		const url = `https://missav123.com/vi/${name}`;
 		console.log(`Đang truy cập: ${url} bằng Puppeteer...`);
 
@@ -315,7 +329,21 @@ app.get('/missav/:name', async (req, res) => {
 // Phương án dự phòng sử dụng axios thay vì puppeteer
 async function getMissavWithAxios(req, res, nameParam) {
 	try {
-		const name = nameParam || req.params.name; // Sử dụng tham số hoặc lấy từ req.params
+		let name = nameParam || req.params.name; // Sử dụng tham số hoặc lấy từ req.params
+
+		// Kiểm tra và định dạng lại mã code JAV
+		if (!name.includes('-')) {
+			// Tìm vị trí chuyển từ chữ cái sang số
+			const regex = /([a-zA-Z]+)(\d+)/;
+			const match = name.match(regex);
+			if (match) {
+				name = `${match[1]}-${match[2]}`;
+				console.log(
+					`Đã chuyển đổi mã code từ ${nameParam || req.params.name} thành ${name}`
+				);
+			}
+		}
+
 		const url = `https://missav123.com/vi/${name}`;
 		console.log(`Đang truy cập: ${url} bằng axios...`);
 
