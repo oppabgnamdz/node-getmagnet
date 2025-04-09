@@ -967,6 +967,139 @@ app.get('/get-all', async (req, res) => {
 	}
 });
 
+app.get('/get-western', async (req, res) => {
+	let browser = null;
+	try {
+		// Kết nối MongoDB
+		const client = await connectToMongo();
+		const db = client.db(DB_NAME);
+		const collection = db.collection(COLLECTION_NAME);
+
+		console.log('Bắt đầu crawl dữ liệu từ javdb.com/western');
+
+		// Khởi tạo puppeteer để crawl
+		browser = await puppeteer.launch({
+			headless: true,
+			args: [
+				'--no-sandbox',
+				'--disable-setuid-sandbox',
+				'--disable-dev-shm-usage',
+				'--disable-gpu',
+				'--disable-features=IsolateOrigins,site-per-process',
+				'--disable-web-security',
+			],
+		});
+
+		// Tạo trang mới
+		const page = await browser.newPage();
+
+		// Cấu hình trình duyệt giống người dùng thật
+		await page.setUserAgent(
+			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+		);
+		await page.setViewport({ width: 1920, height: 1080 });
+
+		// Thiết lập các headers
+		await page.setExtraHTTPHeaders({
+			'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+		});
+
+		// Truy cập trang javdb.com/western
+		console.log('Đang truy cập trang javdb.com/western');
+		await page.goto('https://javdb.com/western', {
+			waitUntil: 'networkidle2',
+			timeout: 60000,
+		});
+
+		// Lấy 10 href đầu tiên có chứa /v/
+		const hrefs = await page.evaluate(() => {
+			const links = Array.from(document.querySelectorAll('a[href*="/v/"]'));
+			return links.slice(0, 10).map((a) => a.href);
+		});
+
+		console.log(`Đã tìm thấy ${hrefs.length} links có chứa /v/`);
+
+		// Mảng chứa các magnet links mới
+		let newMagnets = [];
+
+		// Xử lý từng href
+		for (const href of hrefs) {
+			// Kiểm tra trong DB xem đã có href này chưa
+			const exists = await collection.findOne({ url: href });
+
+			if (exists) {
+				console.log(`Link ${href} đã tồn tại trong DB, bỏ qua.`);
+				continue;
+			}
+
+			console.log(`Đang xử lý link ${href}...`);
+
+			// Tạo trang mới để truy cập vào href
+			const itemPage = await browser.newPage();
+			await itemPage.setUserAgent(
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+			);
+			await itemPage.setViewport({ width: 1920, height: 1080 });
+
+			// Truy cập vào trang chi tiết
+			await itemPage.goto(href, {
+				waitUntil: 'networkidle2',
+				timeout: 60000,
+			});
+
+			// Tìm magnet link đầu tiên
+			const magnetLink = await itemPage.evaluate(() => {
+				// Tìm tất cả các elements có chứa magnet link
+				const magnets = Array.from(
+					document.querySelectorAll('a[href^="magnet:"]')
+				);
+				if (magnets.length > 0) {
+					return magnets[0].href;
+				}
+				return null;
+			});
+
+			await itemPage.close();
+
+			if (magnetLink) {
+				console.log(`Đã tìm thấy magnet link cho ${href}`);
+
+				// Lấy code từ URL
+				const code = href.split('/').pop();
+
+				// Thêm vào DB
+				await collection.insertOne({
+					url: href,
+					code: code,
+					magnet: magnetLink,
+					source: 'javdb-western',
+					created_at: new Date(),
+				});
+
+				newMagnets.push(magnetLink);
+			} else {
+				console.log(`Không tìm thấy magnet link cho ${href}`);
+			}
+
+			// Delay để tránh bị chặn
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+		}
+
+		if (browser) {
+			await browser.close();
+		}
+
+		console.log(`Đã thêm ${newMagnets.length} magnet links mới vào DB`);
+		return res.status(200).json(newMagnets);
+	} catch (error) {
+		console.error('Error in /get-western endpoint:', error);
+		if (browser) {
+			await browser.close();
+		}
+		return res.status(500).json({ error: error.message });
+	}
+});
+
 app.get('*', function (req, res) {
 	return res.status(200).json([]);
 });
