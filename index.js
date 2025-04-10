@@ -1312,24 +1312,40 @@ app.get('/sukebei', async (req, res) => {
 			}
 
 			// Extract hash from magnet URL to use as unique identifier
-			const hashMatch = magnetUrl.match(/magnet:\?xt=urn:btih:([a-zA-Z0-9]+)/i);
-			if (!hashMatch || !hashMatch[1]) continue;
+			const hashMatch = magnetUrl.match(
+				/magnet:\?xt=urn:btih:([a-zA-Z0-9]{32,40})/i
+			);
+			if (!hashMatch || !hashMatch[1]) {
+				console.log(
+					`Bỏ qua magnet link không hợp lệ: ${magnetUrl.substring(0, 50)}...`
+				);
+				continue;
+			}
 
 			const hash = hashMatch[1].toLowerCase();
 
-			const exists = await collection.findOne({
-				hash: hash,
-				source: 'sukebei',
-			});
-
-			if (!exists) {
-				await collection.insertOne({
-					url: magnetUrl,
+			try {
+				// Kiểm tra xem hash đã tồn tại chưa
+				const exists = await collection.findOne({
 					hash: hash,
 					source: 'sukebei',
-					created_at: new Date(),
 				});
-				newMagnets.push(magnetUrl);
+
+				if (!exists) {
+					// Tạo mã duy nhất cho bản ghi
+					const uniqueCode = `sukebei-${hash.substring(0, 8)}`;
+
+					await collection.insertOne({
+						url: magnetUrl,
+						hash: hash,
+						code: uniqueCode, // Không để code là null
+						source: 'sukebei',
+						created_at: new Date(),
+					});
+					newMagnets.push(magnetUrl);
+				}
+			} catch (dbError) {
+				console.error(`Lỗi khi thêm vào MongoDB: ${dbError.message}`);
 			}
 		}
 
