@@ -688,6 +688,7 @@ app.get(`/crypto-json`, async (req, res) => {
 });
 
 app.get('/special', async (req, res) => {
+	let browser = null;
 	try {
 		const minusDate = parseInt(req.query.date.split(',')[0]);
 		if (isNaN(minusDate)) {
@@ -698,61 +699,166 @@ app.get('/special', async (req, res) => {
 		const page = req.query.date.split(',')[2];
 		const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
 		const formattedDate = moment(date).format('YYYY/MM/DD');
+		const baseUrl = side === 'j' ? BASE_URL : BASE_URL_P;
+		const baseWithoutDate = baseUrl.replace('/date', '');
 
-		const crawlPages = async (baseUrl, start, end) => {
-			const linkMap = new Map();
-			const baseWithoutDate = baseUrl.replace('/date', '');
+		console.log(`Đang khởi tạo Puppeteer cho trang ${baseUrl}...`);
+		browser = await puppeteer.launch({
+			headless: true,
+			args: [
+				'--no-sandbox',
+				'--disable-setuid-sandbox',
+				'--disable-dev-shm-usage',
+				'--disable-gpu',
+				'--disable-features=IsolateOrigins,site-per-process',
+				'--disable-web-security',
+			],
+		});
 
-			if (page) {
-				const pageUrl = `${baseUrl}/${formattedDate}?page=${page}`;
-				const html = await fetchPage(pageUrl);
+		const linkMap = new Map();
 
-				if (html) {
-					const $ = cheerio.load(html);
-					const links = $('a[href*="/download/"]')
-						.map((_, el) => $(el).attr('href'))
-						.get();
+		if (page) {
+			// Nếu chỉ định page, chỉ crawl trang đó
+			const pageUrl = `${baseUrl}/${formattedDate}?page=${page}`;
+			console.log(
+				`Đang tải trang ${page} từ ${baseUrl} cho ngày ${formattedDate}`
+			);
+
+			const puppeteerPage = await browser.newPage();
+
+			// Cấu hình trình duyệt giống người dùng thật
+			await puppeteerPage.setUserAgent(
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+			);
+			await puppeteerPage.setViewport({ width: 1920, height: 1080 });
+
+			// Thiết lập các headers
+			await puppeteerPage.setExtraHTTPHeaders({
+				'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+			});
+
+			try {
+				// Mở trang web và đợi nó tải xong
+				await puppeteerPage.goto(pageUrl, {
+					waitUntil: 'networkidle2',
+					timeout: 60000,
+				});
+
+				// Thực thi JavaScript trong trang để tìm các link tải xuống
+				const links = await puppeteerPage.evaluate(() => {
+					return Array.from(
+						document.querySelectorAll('a[href*="/download/"]')
+					).map((link) => link.getAttribute('href'));
+				});
+
+				console.log(`Tìm thấy ${links.length} links từ trang ${page}`);
+
+				links.forEach((link) => {
+					const code = link.split('/').pop().split('.')[0];
+					linkMap.set(code, link);
+				});
+
+				await puppeteerPage.close();
+			} catch (pageError) {
+				console.error(`Lỗi khi tải trang ${pageUrl}:`, pageError.message);
+				await puppeteerPage.close();
+			}
+		} else {
+			// Nếu không chỉ định page, crawl từ trang 1 đến khi không còn links
+			let pageNumber = 1;
+			let shouldContinue = true;
+			const start = 0;
+			const end = 200;
+
+			for (let j = start; j < end && shouldContinue; j++) {
+				const pageUrl = `${baseUrl}/${formattedDate}?page=${j + 1}`;
+				console.log(
+					`Đang tải trang ${j + 1} từ ${baseUrl} cho ngày ${formattedDate}`
+				);
+
+				const puppeteerPage = await browser.newPage();
+
+				// Cấu hình trình duyệt giống người dùng thật
+				await puppeteerPage.setUserAgent(
+					'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+				);
+				await puppeteerPage.setViewport({ width: 1920, height: 1080 });
+
+				// Thiết lập các headers
+				await puppeteerPage.setExtraHTTPHeaders({
+					'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+				});
+
+				try {
+					// Mở trang web và đợi nó tải xong
+					await puppeteerPage.goto(pageUrl, {
+						waitUntil: 'networkidle2',
+						timeout: 60000,
+					});
+
+					// Thực thi JavaScript trong trang để tìm các link tải xuống
+					const links = await puppeteerPage.evaluate(() => {
+						return Array.from(
+							document.querySelectorAll('a[href*="/download/"]')
+						).map((link) => link.getAttribute('href'));
+					});
+
+					console.log(`Tìm thấy ${links.length} links từ trang ${j + 1}`);
+
+					// Nếu không còn links nào, dừng vòng lặp
+					if (links.length === 0) {
+						console.log(
+							`Không tìm thấy links, dừng tìm kiếm cho ${baseUrl} ngày ${formattedDate}`
+						);
+						await puppeteerPage.close();
+						shouldContinue = false;
+						break;
+					}
 
 					links.forEach((link) => {
 						const code = link.split('/').pop().split('.')[0];
 						linkMap.set(code, link);
 					});
-				}
-			} else {
-				for (let j = start; j < end; j++) {
-					const pageUrl = `${baseUrl}/${formattedDate}?page=${j + 1}`;
-					const html = await fetchPage(pageUrl);
 
-					if (!html) continue;
+					await puppeteerPage.close();
 
-					const $ = cheerio.load(html);
-					const links = $('a[href*="/download/"]')
-						.map((_, el) => $(el).attr('href'))
-						.get();
-
-					if (links.length === 0) break;
-
-					links.forEach((link) => {
-						const code = link.split('/').pop().split('.')[0];
-						linkMap.set(code, link);
-					});
-
-					await new Promise((resolve) => setTimeout(resolve, 1000));
+					// Giảm thời gian chờ giữa các trang từ 3s xuống 1.5s
+					console.log(`Chờ 1.5 giây trước khi tải trang tiếp theo...`);
+					await new Promise((resolve) => setTimeout(resolve, 1500));
+				} catch (pageError) {
+					console.error(`Lỗi khi tải trang ${pageUrl}:`, pageError.message);
+					await puppeteerPage.close();
+					shouldContinue = false;
 				}
 			}
+		}
 
-			const uniqueLinks = Array.from(linkMap.values());
-			return uniqueLinks.map((link) => `${baseWithoutDate}${link}`);
-		};
+		// Đóng trình duyệt sau khi hoàn thành
+		if (browser) {
+			console.log(`Đóng trình duyệt Puppeteer cho ${baseUrl}`);
+			await browser.close();
+			browser = null;
+		}
 
-		const baseUrl = side === 'j' ? BASE_URL : BASE_URL_P;
-		const start = 0;
-		const end = 200;
+		const uniqueLinks = Array.from(linkMap.values());
+		console.log(
+			`Tổng cộng ${uniqueLinks.length} links duy nhất từ ${baseUrl} cho ngày ${date}`
+		);
 
-		const torrents = await crawlPages(baseUrl, start, end);
+		const torrents = uniqueLinks.map((link) => `${baseWithoutDate}${link}`);
 		return res.status(200).json(torrents);
 	} catch (e) {
-		console.error('Error in /special endpoint:', e);
+		console.error('Lỗi trong endpoint /special:', e);
+
+		// Đảm bảo đóng trình duyệt nếu có lỗi
+		if (browser) {
+			try {
+				await browser.close();
+			} catch (closeError) {
+				console.error('Lỗi khi đóng trình duyệt:', closeError);
+			}
+		}
+
 		return res.status(200).json([]);
 	}
 });
