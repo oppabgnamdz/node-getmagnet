@@ -1206,6 +1206,148 @@ app.get('/get-western', async (req, res) => {
 	}
 });
 
+app.get('/sukebei', async (req, res) => {
+	try {
+		// Connect to MongoDB
+		const client = await connectToMongo();
+		const db = client.db(DB_NAME);
+		const collection = db.collection(COLLECTION_NAME);
+
+		console.log('Bắt đầu crawl dữ liệu từ sukebei.nyaa.si');
+
+		// Trang cần crawl
+		const pages = [1, 2, 3];
+		const baseUrl = 'https://sukebei.nyaa.si/?f=0&c=2_2&q=&s=id&o=desc&p=';
+
+		let allMagnets = [];
+		let newMagnets = [];
+
+		// Crawl từng trang
+		for (const page of pages) {
+			console.log(`\n==== Đang xử lý trang: ${page} ====`);
+			const url = `${baseUrl}${page}`;
+			console.log(`Đang tải trang: ${url}`);
+
+			try {
+				const html = await fetchPage(url);
+
+				if (!html) {
+					console.error(`Không thể tải trang ${url}`);
+					continue;
+				}
+
+				// Tải JSDOM để phân tích HTML
+				const dom = new JSDOM(html);
+				const document = dom.window.document;
+
+				// Tìm tất cả các thẻ a có href chứa magnet:?xt
+				const magnetLinks = Array.from(
+					document.querySelectorAll('a[href^="magnet:?xt"]')
+				).map((a) => a.href);
+
+				if (magnetLinks && magnetLinks.length > 0) {
+					console.log(
+						`Đã tìm thấy ${magnetLinks.length} magnet links từ trang ${page}`
+					);
+
+					// Lọc và format các magnet links
+					const formattedMagnets = magnetLinks.map((link) => {
+						// Thay thế &amp; bằng &
+						return link.replace(/&amp;/g, '&');
+					});
+
+					allMagnets = [...allMagnets, ...formattedMagnets];
+				} else {
+					// Nếu không tìm thấy qua DOM, thử dùng regex
+					const magnetRegex =
+						/magnet:\?xt=urn:btih:[a-zA-Z0-9]{40}(&amp;|&)[^"']*/g;
+					const matches = html.match(magnetRegex);
+
+					if (matches && matches.length > 0) {
+						console.log(
+							`Đã tìm thấy ${matches.length} magnet links từ trang ${page} bằng regex`
+						);
+
+						// Lọc và format các magnet links
+						const formattedMagnets = matches.map((link) => {
+							// Thay thế &amp; bằng &
+							return link.replace(/&amp;/g, '&');
+						});
+
+						allMagnets = [...allMagnets, ...formattedMagnets];
+					} else {
+						console.log(`Không tìm thấy magnet links nào từ trang ${page}`);
+					}
+				}
+			} catch (pageError) {
+				console.error(`Lỗi khi xử lý trang ${url}:`, pageError.message);
+			}
+
+			// Delay để tránh bị block
+			if (page !== pages[pages.length - 1]) {
+				console.log(`Chờ 1.5 giây trước khi tải trang tiếp theo...`);
+				await new Promise((resolve) => setTimeout(resolve, 1500));
+			}
+		}
+
+		console.log(
+			`\n==== Tổng cộng đã thu thập được ${allMagnets.length} magnet links ====`
+		);
+
+		if (allMagnets.length === 0) {
+			return res.status(200).json({
+				message: 'Không tìm thấy magnet links nào',
+				magnets: [],
+			});
+		}
+
+		console.log(`\nBắt đầu kiểm tra và thêm vào MongoDB...`);
+
+		// Check for existing magnets and insert new ones
+		let processedCount = 0;
+		for (const magnetUrl of allMagnets) {
+			processedCount++;
+			if (processedCount % 20 === 0) {
+				console.log(`Đã xử lý ${processedCount}/${allMagnets.length} links`);
+			}
+
+			// Extract hash from magnet URL to use as unique identifier
+			const hashMatch = magnetUrl.match(/magnet:\?xt=urn:btih:([a-zA-Z0-9]+)/i);
+			if (!hashMatch || !hashMatch[1]) continue;
+
+			const hash = hashMatch[1].toLowerCase();
+
+			const exists = await collection.findOne({
+				hash: hash,
+				source: 'sukebei',
+			});
+
+			if (!exists) {
+				await collection.insertOne({
+					url: magnetUrl,
+					hash: hash,
+					source: 'sukebei',
+					created_at: new Date(),
+				});
+				newMagnets.push(magnetUrl);
+			}
+		}
+
+		console.log(
+			`\n==== Hoàn thành! Đã thêm ${newMagnets.length} magnet links mới vào MongoDB ====`
+		);
+
+		// Return array of magnet URLs
+		return res.status(200).json(newMagnets);
+	} catch (error) {
+		console.error('Error in /sukebei endpoint:', error);
+		return res.status(500).json({
+			error: error.message,
+			stack: process.env.NODE_ENV === 'production' ? undefined : error.stack,
+		});
+	}
+});
+
 app.get('*', function (req, res) {
 	return res.status(200).json([]);
 });
