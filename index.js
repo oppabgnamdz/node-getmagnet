@@ -1364,6 +1364,130 @@ app.get('/sukebei', async (req, res) => {
 	}
 });
 
+app.get('/onejav', async (req, res) => {
+	try {
+		// Connect to MongoDB
+		const client = await connectToMongo();
+		const db = client.db(DB_NAME);
+		const collection = db.collection(COLLECTION_NAME);
+
+		console.log('Bắt đầu crawl dữ liệu từ onejav.com');
+
+		// Trang cần crawl (từ 1 đến 10)
+		const pages = Array.from({ length: 10 }, (_, i) => i + 1);
+		const baseUrl = 'https://onejav.com/new?page=';
+
+		let allLinks = [];
+		let newLinks = [];
+
+		// Crawl từng trang
+		for (const page of pages) {
+			console.log(`\n==== Đang xử lý trang: ${page} ====`);
+			const url = `${baseUrl}${page}`;
+			console.log(`Đang tải trang: ${url}`);
+
+			try {
+				const html = await fetchPage(url);
+
+				if (!html) {
+					console.error(`Không thể tải trang ${url}`);
+					continue;
+				}
+
+				// Tải JSDOM để phân tích HTML
+				const dom = new JSDOM(html);
+				const document = dom.window.document;
+
+				// Tìm tất cả các thẻ a có href chứa /download/
+				const downloadLinks = Array.from(
+					document.querySelectorAll('a[href*="/download/"]')
+				).map((a) => a.href);
+
+				if (downloadLinks && downloadLinks.length > 0) {
+					console.log(
+						`Đã tìm thấy ${downloadLinks.length} download links từ trang ${page}`
+					);
+					allLinks = [...allLinks, ...downloadLinks];
+				} else {
+					console.log(`Không tìm thấy download links nào từ trang ${page}`);
+				}
+			} catch (pageError) {
+				console.error(`Lỗi khi xử lý trang ${url}:`, pageError.message);
+			}
+
+			// Delay để tránh bị block
+			if (page !== pages[pages.length - 1]) {
+				console.log(`Chờ 1.5 giây trước khi tải trang tiếp theo...`);
+				await new Promise((resolve) => setTimeout(resolve, 1500));
+			}
+		}
+
+		console.log(
+			`\n==== Tổng cộng đã thu thập được ${allLinks.length} download links ====`
+		);
+
+		if (allLinks.length === 0) {
+			return res.status(200).json({
+				message: 'Không tìm thấy download links nào',
+				links: [],
+			});
+		}
+
+		console.log(`\nBắt đầu kiểm tra và thêm vào MongoDB...`);
+
+		// Check for existing links and insert new ones
+		let processedCount = 0;
+		for (const link of allLinks) {
+			processedCount++;
+			if (processedCount % 20 === 0) {
+				console.log(`Đã xử lý ${processedCount}/${allLinks.length} links`);
+			}
+
+			// Extract code from URL to use as unique identifier
+			const codeMatch = link.match(/\/download\/([^\/]+)/);
+			if (!codeMatch || !codeMatch[1]) {
+				console.log(`Bỏ qua link không hợp lệ: ${link.substring(0, 50)}...`);
+				continue;
+			}
+
+			const code = codeMatch[1];
+
+			try {
+				// Kiểm tra xem code đã tồn tại chưa
+				const exists = await collection.findOne({
+					code: code,
+					source: 'onejav',
+				});
+
+				if (!exists) {
+					await collection.insertOne({
+						url: link,
+						code: code,
+						source: 'onejav',
+						created_at: new Date(),
+					});
+					newLinks.push(link);
+				}
+			} catch (dbError) {
+				console.error(`Lỗi khi thêm vào MongoDB: ${dbError.message}`);
+			}
+		}
+
+		console.log(
+			`\n==== Hoàn thành! Đã thêm ${newLinks.length} download links mới vào MongoDB ====`
+		);
+
+		// Return array of download URLs
+		return res.status(200).json(newLinks);
+	} catch (error) {
+		console.error('Error in /onejav endpoint:', error);
+		return res.status(500).json({
+			error: error.message,
+			stack: process.env.NODE_ENV === 'production' ? undefined : error.stack,
+		});
+	}
+});
+
 app.get('*', function (req, res) {
 	return res.status(200).json([]);
 });
