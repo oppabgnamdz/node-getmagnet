@@ -1401,7 +1401,7 @@ app.get('/onejav', async (req, res) => {
 				// Tìm tất cả các thẻ a có href chứa /download/
 				const downloadLinks = Array.from(
 					document.querySelectorAll('a[href*="/download/"]')
-				).map((a) => a.href);
+				).map((a) => 'https://onejav.com' + a.href);
 
 				if (downloadLinks && downloadLinks.length > 0) {
 					console.log(
