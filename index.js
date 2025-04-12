@@ -1488,6 +1488,317 @@ app.get('/onejav', async (req, res) => {
 	}
 });
 
+app.get('/24av/:name', async (req, res) => {
+	let browser = null;
+	try {
+		let name = req.params.name;
+
+		// Kiểm tra và định dạng lại mã code JAV nếu cần
+		if (!name.includes('-')) {
+			// Tìm vị trí chuyển từ chữ cái sang số
+			const regex = /([a-zA-Z]+)(\d+)/;
+			const match = name.match(regex);
+			if (match) {
+				name = `${match[1]}-${match[2]}`;
+				console.log(
+					`Đã chuyển đổi mã code từ ${req.params.name} thành ${name}`
+				);
+			}
+		}
+
+		const url = `https://24av.net/vi/dm2/v/${name}`;
+		console.log(`Đang truy cập: ${url} bằng Puppeteer...`);
+
+		// Khởi tạo trình duyệt
+		browser = await puppeteer.launch({
+			headless: true,
+			args: [
+				'--no-sandbox',
+				'--disable-setuid-sandbox',
+				'--disable-dev-shm-usage',
+				'--disable-gpu',
+				'--disable-features=IsolateOrigins,site-per-process',
+				'--disable-web-security',
+			],
+		});
+
+		const page = await browser.newPage();
+
+		// Mảng lưu các URLs m3u8 đã phát hiện
+		let m3u8Urls = [];
+
+		// Lắng nghe tất cả các network requests
+		await page.setRequestInterception(true);
+
+		page.on('request', (request) => {
+			const url = request.url();
+			if (url.includes('.m3u8')) {
+				console.log(`Phát hiện m3u8 URL trong request: ${url}`);
+				if (!m3u8Urls.includes(url)) {
+					m3u8Urls.push(url);
+				}
+			}
+			request.continue();
+		});
+
+		page.on('response', async (response) => {
+			const url = response.url();
+			if (url.includes('.m3u8')) {
+				console.log(`Phát hiện m3u8 URL trong response: ${url}`);
+				if (!m3u8Urls.includes(url)) {
+					m3u8Urls.push(url);
+				}
+			}
+		});
+
+		// Cấu hình trình duyệt giống người dùng thật
+		await page.setUserAgent(
+			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+		);
+		await page.setViewport({ width: 1920, height: 1080 });
+
+		// Thiết lập các headers
+		await page.setExtraHTTPHeaders({
+			'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+		});
+
+		// Mở trang web và đợi nó tải xong
+		await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+
+		// Đợi thêm thời gian để đảm bảo các video player có thể tải
+		await new Promise((resolve) => setTimeout(resolve, 8000));
+
+		// Nếu chưa tìm thấy m3u8, thử tìm trong tất cả các frames
+		if (m3u8Urls.length === 0) {
+			// Tìm trong tất cả các frames
+			const frames = page.frames();
+			for (const frame of frames) {
+				try {
+					const frameContent = await frame.content();
+					const matches = frameContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
+					if (matches) {
+						for (const match of matches) {
+							if (!m3u8Urls.includes(match)) {
+								console.log(`Phát hiện m3u8 URL trong frame: ${match}`);
+								m3u8Urls.push(match);
+							}
+						}
+					}
+				} catch (e) {
+					console.log(`Lỗi khi xử lý frame: ${e.message}`);
+				}
+			}
+		}
+
+		// Nếu vẫn chưa tìm thấy, tìm trong nội dung trang
+		if (m3u8Urls.length === 0) {
+			const pageContent = await page.content();
+			const matches = pageContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
+			if (matches) {
+				for (const match of matches) {
+					if (!m3u8Urls.includes(match)) {
+						console.log(`Phát hiện m3u8 URL trong HTML: ${match}`);
+						m3u8Urls.push(match);
+					}
+				}
+			}
+
+			// Thực thi để tìm thông qua các script hoặc API khác nếu cần
+			const videoInfo = await page.evaluate(() => {
+				// Tìm các m3u8 URLs trong các phần tử video
+				const videoElements = document.querySelectorAll('video source');
+				const m3u8UrlsFromVideo = Array.from(videoElements)
+					.filter((src) => src.src && src.src.includes('.m3u8'))
+					.map((src) => src.src);
+
+				// Tìm tất cả các script trên trang
+				const scripts = document.querySelectorAll('script');
+				const scriptContents = Array.from(scripts).map((s) => s.innerHTML);
+
+				// Tìm tất cả UUID có thể liên quan đến video
+				const uuidMatches =
+					document.body.innerHTML.match(
+						/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+					) || [];
+
+				return {
+					m3u8UrlsFromVideo,
+					scriptContents,
+					uuidMatches,
+				};
+			});
+
+			// Thêm m3u8 URLs từ các phần tử video
+			if (
+				videoInfo.m3u8UrlsFromVideo &&
+				videoInfo.m3u8UrlsFromVideo.length > 0
+			) {
+				for (const url of videoInfo.m3u8UrlsFromVideo) {
+					if (!m3u8Urls.includes(url)) {
+						console.log(`Phát hiện m3u8 URL từ phần tử video: ${url}`);
+						m3u8Urls.push(url);
+					}
+				}
+			}
+
+			// Tìm m3u8 URLs trong nội dung script
+			if (videoInfo.scriptContents && videoInfo.scriptContents.length > 0) {
+				for (const script of videoInfo.scriptContents) {
+					if (!script) continue;
+
+					const scriptMatches = script.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
+					if (scriptMatches) {
+						for (const match of scriptMatches) {
+							if (!m3u8Urls.includes(match)) {
+								console.log(`Phát hiện m3u8 URL từ script: ${match}`);
+								m3u8Urls.push(match);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Đóng trình duyệt khi xong
+		await browser.close();
+		browser = null;
+
+		// Trả về kết quả
+		if (m3u8Urls.length > 0) {
+			return res.json({ m3u8Url: m3u8Urls[0], allUrls: m3u8Urls });
+		}
+
+		// Nếu không tìm thấy, thử dùng axios
+		console.log('Không tìm thấy URL m3u8 với Puppeteer, chuyển sang axios');
+		return await get24avWithAxios(req, res, name);
+	} catch (error) {
+		console.error('Lỗi Puppeteer:', error.message);
+
+		if (browser) {
+			try {
+				await browser.close();
+			} catch (e) {
+				console.error('Lỗi khi đóng trình duyệt:', e);
+			}
+		}
+
+		// Nếu Puppeteer gặp lỗi, thử dùng axios với name từ params
+		try {
+			const name = req.params.name; // Lấy name từ params
+			console.log(`Chuyển sang sử dụng axios cho: ${name}`);
+			return await get24avWithAxios(req, res, name);
+		} catch (axiosError) {
+			console.error('Lỗi khi dùng axios:', axiosError.message);
+			res.status(500).json({
+				error: 'Failed to fetch page',
+				message: error.message,
+			});
+		}
+	}
+});
+
+// Phương án dự phòng sử dụng axios thay vì puppeteer cho 24av
+async function get24avWithAxios(req, res, nameParam) {
+	try {
+		let name = nameParam || req.params.name; // Sử dụng tham số hoặc lấy từ req.params
+
+		// Kiểm tra và định dạng lại mã code JAV nếu cần
+		if (!name.includes('-')) {
+			// Tìm vị trí chuyển từ chữ cái sang số
+			const regex = /([a-zA-Z]+)(\d+)/;
+			const match = name.match(regex);
+			if (match) {
+				name = `${match[1]}-${match[2]}`;
+				console.log(
+					`Đã chuyển đổi mã code từ ${nameParam || req.params.name} thành ${name}`
+				);
+			}
+		}
+
+		const url = `https://24av.net/vi/dm2/v/${name}`;
+		console.log(`Đang truy cập: ${url} bằng axios...`);
+
+		// Lấy nội dung trang web
+		const response = await axios.get(url, {
+			headers: {
+				'User-Agent':
+					'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+				Accept:
+					'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+				'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+				'Accept-Encoding': 'gzip, deflate, br',
+				'Cache-Control': 'max-age=0',
+				Referer: 'https://24av.net/',
+				'sec-ch-ua':
+					'"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+				'sec-ch-ua-mobile': '?0',
+				'sec-ch-ua-platform': '"Windows"',
+				'sec-fetch-dest': 'document',
+				'sec-fetch-mode': 'navigate',
+				'sec-fetch-site': 'none',
+				'sec-fetch-user': '?1',
+				'Upgrade-Insecure-Requests': '1',
+			},
+			timeout: 60000,
+		});
+
+		// Tìm URL m3u8 trực tiếp trong nội dung HTML
+		const pageContent = response.data;
+		const m3u8Matches = pageContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g) || [];
+
+		// Parse nội dung HTML để tìm sâu hơn
+		const $ = cheerio.load(pageContent);
+
+		// Tìm URL m3u8 trong script và các phần tử video
+		let m3u8Urls = [...m3u8Matches]; // Bắt đầu với các URL đã tìm thấy
+
+		// Tìm trong các phần tử video
+		$('video source').each((i, el) => {
+			const src = $(el).attr('src');
+			if (src && src.includes('.m3u8') && !m3u8Urls.includes(src)) {
+				console.log(`Tìm thấy URL m3u8 trong phần tử video: ${src}`);
+				m3u8Urls.push(src);
+			}
+		});
+
+		// Tìm trong các script
+		const scripts = $('script')
+			.map((i, el) => $(el).html())
+			.get();
+
+		for (const script of scripts) {
+			if (!script) continue;
+
+			if (script.includes('.m3u8')) {
+				const matches = script.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
+				if (matches && matches.length > 0) {
+					for (const match of matches) {
+						if (!m3u8Urls.includes(match)) {
+							console.log(`Tìm thấy URL m3u8 trong script: ${match}`);
+							m3u8Urls.push(match);
+						}
+					}
+				}
+			}
+		}
+
+		// Nếu tìm được m3u8 URL, trả về ngay
+		if (m3u8Urls.length > 0) {
+			console.log(`Trả về URL m3u8 đầu tiên: ${m3u8Urls[0]}`);
+			return res.json({ m3u8Url: m3u8Urls[0], allUrls: m3u8Urls });
+		}
+
+		// Không tìm thấy thông tin để tạo URL
+		return res.status(404).json({
+			error: 'M3U8 URL not found',
+			message: 'Không thể tìm thấy URL m3u8 trong nội dung trang',
+		});
+	} catch (error) {
+		console.error('Lỗi axios:', error.message);
+		throw error;
+	}
+}
+
 app.get('*', function (req, res) {
 	return res.status(200).json([]);
 });
