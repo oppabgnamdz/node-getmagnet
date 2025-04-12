@@ -1506,7 +1506,7 @@ app.get('/24av/:name', async (req, res) => {
 			}
 		}
 
-		const url = `https://24av.net/vi/dm2/v/${name}`;
+		const url = `https://24av.net/vi/v/${name}`;
 		console.log(`Đang truy cập: ${url} bằng Puppeteer...`);
 
 		// Khởi tạo trình duyệt
@@ -1715,7 +1715,7 @@ async function get24avWithAxios(req, res, nameParam) {
 			}
 		}
 
-		const url = `https://24av.net/vi/dm2/v/${name}`;
+		const url = `https://24av.net/vi/v/${name}`;
 		console.log(`Đang truy cập: ${url} bằng axios...`);
 
 		// Lấy nội dung trang web
