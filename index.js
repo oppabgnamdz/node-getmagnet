@@ -1506,8 +1506,9 @@ app.get('/24av/:name', async (req, res) => {
 			}
 		}
 
-		const url = `https://24av.net/vi/v/${name}`;
-		console.log(`Đang truy cập: ${url} bằng Puppeteer...`);
+		// Tạo URL tìm kiếm
+		const searchUrl = `https://24av.net/vi/search?keyword=${encodeURIComponent(name)}`;
+		console.log(`Đang truy cập trang tìm kiếm: ${searchUrl}`);
 
 		// Khởi tạo trình duyệt
 		browser = await puppeteer.launch({
@@ -1522,6 +1523,79 @@ app.get('/24av/:name', async (req, res) => {
 			],
 		});
 
+		const searchPage = await browser.newPage();
+
+		// Cấu hình trình duyệt giống người dùng thật
+		await searchPage.setUserAgent(
+			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+		);
+		await searchPage.setViewport({ width: 1920, height: 1080 });
+
+		// Thiết lập các headers
+		await searchPage.setExtraHTTPHeaders({
+			'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+		});
+
+		// Mở trang tìm kiếm và đợi nó tải xong
+		await searchPage.goto(searchUrl, {
+			waitUntil: 'networkidle2',
+			timeout: 60000,
+		});
+
+		// Đợi thêm thời gian để đảm bảo trang tải xong
+		await new Promise((resolve) => setTimeout(resolve, 5000));
+
+		// Lấy URL đúng từ kết quả tìm kiếm
+		const videoData = await searchPage.evaluate(() => {
+			// Tìm thẻ a đầu tiên có class="name"
+			const nameLink = document.querySelector('a.name');
+			if (nameLink) {
+				// Lấy href của link đầu tiên
+				const href = nameLink.getAttribute('href');
+				// Lấy base URL
+				const baseUrl = window.location.origin;
+
+				// Đảm bảo URL đầy đủ
+				let fullUrl = '';
+				if (href.startsWith('http')) {
+					fullUrl = href;
+				} else if (href.startsWith('/vi/')) {
+					fullUrl = baseUrl + href;
+				} else if (href.startsWith('/')) {
+					fullUrl = baseUrl + '/vi' + href;
+				} else {
+					fullUrl = baseUrl + '/vi/' + href;
+				}
+
+				return {
+					href: href,
+					fullUrl: fullUrl,
+				};
+			}
+			return null;
+		});
+
+		let videoUrl = '';
+
+		// Kiểm tra nếu tìm thấy kết quả
+		if (videoData && videoData.fullUrl) {
+			console.log(
+				`Đã tìm thấy URL video từ trang tìm kiếm: ${videoData.fullUrl}`
+			);
+			videoUrl = videoData.fullUrl;
+		} else {
+			// Nếu không tìm thấy, sử dụng URL mặc định
+			videoUrl = `https://24av.net/vi/v/${name}`;
+			console.log(
+				`Không tìm thấy kết quả tìm kiếm, sử dụng URL mặc định: ${videoUrl}`
+			);
+		}
+
+		// Đóng trang tìm kiếm
+		await searchPage.close();
+
+		// Mở trang video
+		console.log(`Đang truy cập URL video: ${videoUrl}`);
 		const page = await browser.newPage();
 
 		// Mảng lưu các URLs m3u8 đã phát hiện
@@ -1563,7 +1637,7 @@ app.get('/24av/:name', async (req, res) => {
 		});
 
 		// Mở trang web và đợi nó tải xong
-		await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
+		await page.goto(videoUrl, { waitUntil: 'networkidle2', timeout: 60000 });
 
 		// Đợi thêm thời gian để đảm bảo các video player có thể tải
 		await new Promise((resolve) => setTimeout(resolve, 8000));
@@ -1663,14 +1737,26 @@ app.get('/24av/:name', async (req, res) => {
 		await browser.close();
 		browser = null;
 
-		// Trả về kết quả
+		// Trả về kết quả nếu tìm thấy
 		if (m3u8Urls.length > 0) {
 			return res.json({ m3u8Url: m3u8Urls[0], allUrls: m3u8Urls });
 		}
 
-		// Nếu không tìm thấy, thử dùng axios
+		// Nếu không tìm thấy qua Puppeteer, thử dùng axios với URL video đã tìm được
 		console.log('Không tìm thấy URL m3u8 với Puppeteer, chuyển sang axios');
-		return await get24avWithAxios(req, res, name);
+
+		// Trích xuất name từ URL video (vì URL có thể khác với name ban đầu)
+		let videoName = name;
+		if (videoData && videoData.href) {
+			// Pattern mở rộng để hỗ trợ nhiều định dạng URL khác nhau như dm1/v/mifd-570 hoặc vi/v/mifd-570
+			const pathMatch = videoData.href.match(/\/v\/([^\/]+)$/);
+			if (pathMatch && pathMatch[1]) {
+				videoName = pathMatch[1];
+				console.log(`Đã trích xuất mã code mới từ URL: ${videoName}`);
+			}
+		}
+
+		return await get24avWithAxios(req, res, videoName);
 	} catch (error) {
 		console.error('Lỗi Puppeteer:', error.message);
 
@@ -1715,11 +1801,64 @@ async function get24avWithAxios(req, res, nameParam) {
 			}
 		}
 
-		const url = `https://24av.net/vi/v/${name}`;
-		console.log(`Đang truy cập: ${url} bằng axios...`);
+		// Đầu tiên thử tìm kiếm để lấy URL chính xác
+		const searchUrl = `https://24av.net/vi/search?keyword=${encodeURIComponent(name)}`;
+		console.log(`Đang tìm kiếm URL chính xác qua: ${searchUrl}`);
 
-		// Lấy nội dung trang web
-		const response = await axios.get(url, {
+		// Lấy nội dung trang tìm kiếm
+		const searchResponse = await axios.get(searchUrl, {
+			headers: {
+				'User-Agent':
+					'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+				Accept:
+					'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+				'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+				'Accept-Encoding': 'gzip, deflate, br',
+				'Cache-Control': 'max-age=0',
+				Referer: 'https://24av.net/',
+			},
+			timeout: 60000,
+		});
+
+		// Parse nội dung HTML để tìm URL video đầu tiên
+		const $ = cheerio.load(searchResponse.data);
+		let videoUrl = '';
+		let foundUrl = false;
+
+		// Tìm thẻ a đầu tiên có class="name"
+		const nameLink = $('a.name').first();
+		if (nameLink.length > 0) {
+			const href = nameLink.attr('href');
+			if (href) {
+				// Kiểm tra nếu href đã có http thì sử dụng trực tiếp
+				if (href.startsWith('http')) {
+					videoUrl = href;
+				} else {
+					// Đảm bảo URL đầy đủ có /vi/ nếu cần
+					if (href.startsWith('/vi/')) {
+						videoUrl = `https://24av.net${href}`;
+					} else if (href.startsWith('/')) {
+						videoUrl = `https://24av.net/vi${href}`;
+					} else {
+						videoUrl = `https://24av.net/vi/${href}`;
+					}
+				}
+				foundUrl = true;
+				console.log(`Đã tìm thấy URL video từ trang tìm kiếm: ${videoUrl}`);
+			}
+		}
+
+		// Nếu không tìm thấy URL từ tìm kiếm, sử dụng URL mặc định
+		if (!foundUrl) {
+			videoUrl = `https://24av.net/vi/v/${name}`;
+			console.log(
+				`Không tìm thấy kết quả tìm kiếm, sử dụng URL mặc định: ${videoUrl}`
+			);
+		}
+
+		// Lấy nội dung trang video
+		console.log(`Đang truy cập URL video: ${videoUrl}`);
+		const response = await axios.get(videoUrl, {
 			headers: {
 				'User-Agent':
 					'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -1747,14 +1886,14 @@ async function get24avWithAxios(req, res, nameParam) {
 		const m3u8Matches = pageContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g) || [];
 
 		// Parse nội dung HTML để tìm sâu hơn
-		const $ = cheerio.load(pageContent);
+		const $video = cheerio.load(pageContent);
 
 		// Tìm URL m3u8 trong script và các phần tử video
 		let m3u8Urls = [...m3u8Matches]; // Bắt đầu với các URL đã tìm thấy
 
 		// Tìm trong các phần tử video
-		$('video source').each((i, el) => {
-			const src = $(el).attr('src');
+		$video('video source').each((i, el) => {
+			const src = $video(el).attr('src');
 			if (src && src.includes('.m3u8') && !m3u8Urls.includes(src)) {
 				console.log(`Tìm thấy URL m3u8 trong phần tử video: ${src}`);
 				m3u8Urls.push(src);
@@ -1762,8 +1901,8 @@ async function get24avWithAxios(req, res, nameParam) {
 		});
 
 		// Tìm trong các script
-		const scripts = $('script')
-			.map((i, el) => $(el).html())
+		const scripts = $video('script')
+			.map((i, el) => $video(el).html())
 			.get();
 
 		for (const script of scripts) {
@@ -1813,7 +1952,7 @@ app.get('/release-24av', async (req, res) => {
 		let allItems = [];
 
 		// Lấy dữ liệu từ 10 trang
-		for (let page = 1; page <= 10; page++) {
+		for (let page = 1; page <= 100; page++) {
 			try {
 				console.log(`Đang lấy dữ liệu từ trang ${page}...`);
 				const url = `https://24av.net/vi/dm5/recent-update?page=${page}&json=1`;
