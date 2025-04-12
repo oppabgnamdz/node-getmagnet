@@ -1799,6 +1799,95 @@ async function get24avWithAxios(req, res, nameParam) {
 	}
 }
 
+// Route để lấy dữ liệu mới từ 24av
+app.get('/release-24av', async (req, res) => {
+	try {
+		console.log('Bắt đầu lấy dữ liệu từ 10 trang 24av...');
+
+		// Kết nối đến MongoDB
+		const client = await connectToMongo();
+		const db = client.db(DB_NAME);
+		const collection = db.collection('24av_items');
+
+		// Mảng chứa tất cả items từ 10 trang
+		let allItems = [];
+
+		// Lấy dữ liệu từ 10 trang
+		for (let page = 1; page <= 10; page++) {
+			try {
+				console.log(`Đang lấy dữ liệu từ trang ${page}...`);
+				const url = `https://24av.net/vi/dm5/recent-update?page=${page}&json=1`;
+
+				const response = await axios.get(url, {
+					headers: {
+						'User-Agent':
+							'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+						Accept: 'application/json',
+						'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+					},
+					timeout: 30000,
+				});
+
+				if (
+					response.data &&
+					response.data.status === 200 &&
+					response.data.result &&
+					response.data.result.items
+				) {
+					// Thêm items vào mảng allItems
+					allItems = allItems.concat(response.data.result.items);
+					console.log(
+						`Đã lấy ${response.data.result.items.length} items từ trang ${page}`
+					);
+				} else {
+					console.log(`Không có dữ liệu hợp lệ từ trang ${page}`);
+				}
+
+				// Đợi một chút giữa các request để tránh bị block
+				await new Promise((resolve) => setTimeout(resolve, 1000));
+			} catch (error) {
+				console.error(`Lỗi khi lấy dữ liệu từ trang ${page}:`, error.message);
+			}
+		}
+
+		console.log(`Tổng cộng đã lấy được ${allItems.length} items từ 10 trang`);
+
+		// Mảng chứa các items mới
+		let newItems = [];
+
+		// Kiểm tra từng item xem đã có trong database chưa
+		for (const item of allItems) {
+			// Thêm trường created_at
+			item.created_at = new Date();
+
+			// Kiểm tra item đã tồn tại chưa bằng id
+			const existingItem = await collection.findOne({ id: item.id });
+
+			if (!existingItem) {
+				// Item chưa tồn tại, thêm vào mảng newItems
+				newItems.push(item);
+			}
+		}
+
+		// Nếu có items mới thì thêm vào database
+		if (newItems.length > 0) {
+			await collection.insertMany(newItems);
+			console.log(`Đã thêm ${newItems.length} items mới vào database`);
+		} else {
+			console.log('Không có items mới để thêm vào database');
+		}
+
+		// Trả về mảng code của các items mới
+		const newItemCodes = newItems.map((item) => item.code);
+
+		// Trả về kết quả
+		return res.status(200).json(newItemCodes);
+	} catch (error) {
+		console.error('Lỗi khi xử lý request:', error);
+		return res.status(500).json([]);
+	}
+});
+
 app.get('*', function (req, res) {
 	return res.status(200).json([]);
 });
