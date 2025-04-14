@@ -1952,7 +1952,7 @@ app.get('/release-24av', async (req, res) => {
 		let allItems = [];
 
 		// Lấy dữ liệu từ 10 trang
-		for (let page = 1; page <= 100; page++) {
+		for (let page = 1; page <= 10; page++) {
 			try {
 				console.log(`Đang lấy dữ liệu từ trang ${page}...`);
 				const url = `https://24av.net/vi/dm5/recent-update?page=${page}&json=1`;
