@@ -922,7 +922,7 @@ const crawlPages = async (baseUrl, date) => {
 					// Thực thi JavaScript trong trang để tìm các link tải xuống
 					const links = await page.evaluate(() => {
 						return Array.from(
-							document.querySelectorAll('a[href*="/download/"]')
+							document.querySelectorAll('a[href*="magnet:"]')
 						).map((link) => link.getAttribute('href'));
 					});
 
@@ -970,7 +970,7 @@ const crawlPages = async (baseUrl, date) => {
 		return uniqueLinks.map((link) => {
 			const code = link.split('/').pop().split('.')[0];
 			return {
-				url: `${baseWithoutDate}${link}`,
+				url: link,
 				code: code,
 				source: baseUrl === BASE_URL ? 'jav' : 'ppv',
 				date: date,
