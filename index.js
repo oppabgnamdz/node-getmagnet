@@ -156,23 +156,59 @@ app.get('/missav/:name', async (req, res) => {
 		const url = `https://missav123.com/vi/${name}`;
 		console.log(`Đang truy cập: ${url} bằng Puppeteer...`);
 
-		// Cố gắng chạy trực tiếp mà không cần chỉ định executablePath
-		browser = await puppeteer.launch({
-			headless: true,
-			args: [
-				'--no-sandbox',
-				'--disable-setuid-sandbox',
-				'--disable-dev-shm-usage',
-				'--disable-gpu',
-				'--disable-features=IsolateOrigins,site-per-process',
-				'--disable-web-security',
-			],
-		});
-
-		const page = await browser.newPage();
+		try {
+			// Cố gắng khởi động Puppeteer với thời gian chờ ngắn
+			browser = await puppeteer.launch({
+				headless: true,
+				ignoreDefaultArgs: ['--enable-automation'],
+				args: [
+					'--no-sandbox',
+					'--disable-setuid-sandbox',
+					'--disable-dev-shm-usage',
+					'--disable-gpu',
+					'--disable-features=IsolateOrigins,site-per-process',
+					'--disable-web-security',
+					'--single-process',
+					'--no-zygote',
+					'--disable-accelerated-2d-canvas',
+					'--disable-extensions',
+					'--disable-background-networking',
+					'--disable-background-timer-throttling',
+					'--disable-backgrounding-occluded-windows',
+					'--disable-breakpad',
+					'--disable-client-side-phishing-detection',
+					'--disable-component-extensions-with-background-pages',
+					'--disable-default-apps',
+					'--disable-domain-reliability',
+					'--disable-hang-monitor',
+					'--disable-ipc-flooding-protection',
+					'--disable-notifications',
+					'--disable-offer-store-unmasked-wallet-cards',
+					'--disable-popup-blocking',
+					'--disable-prompt-on-repost',
+					'--disable-renderer-backgrounding',
+					'--disable-sync',
+					'--disable-translate',
+					'--metrics-recording-only',
+					'--mute-audio',
+					'--no-default-browser-check',
+					'--no-first-run',
+					'--password-store=basic',
+					'--use-mock-keychain',
+				],
+				timeout: 15000, // Thời gian chờ ngắn hơn (15 giây)
+			});
+		} catch (puppeteerError) {
+			console.error('Không thể khởi động Puppeteer:', puppeteerError.message);
+			console.log('Chuyển sang sử dụng axios...');
+			return await getMissavWithAxios(req, res, name);
+		}
 
 		// Mảng lưu các URLs m3u8 đã phát hiện
 		let m3u8Urls = [];
+
+		// Tiếp tục phần còn lại của mã nếu Puppeteer khởi động thành công
+		const page = await browser.newPage();
 
 		// Lắng nghe tất cả các network requests
 		await page.setRequestInterception(true);
@@ -326,7 +362,7 @@ app.get('/missav/:name', async (req, res) => {
 	}
 });
 
-// Phương án dự phòng sử dụng axios thay vì puppeteer
+// Phương án dự phòng sử dụng axios thay vì puppeteer cho 24av
 async function getMissavWithAxios(req, res, nameParam) {
 	try {
 		let name = nameParam || req.params.name; // Sử dụng tham số hoặc lấy từ req.params
@@ -703,17 +739,52 @@ app.get('/special', async (req, res) => {
 		const baseWithoutDate = baseUrl.replace('/date', '');
 
 		console.log(`Đang khởi tạo Puppeteer cho trang ${baseUrl}...`);
-		browser = await puppeteer.launch({
-			headless: true,
-			args: [
-				'--no-sandbox',
-				'--disable-setuid-sandbox',
-				'--disable-dev-shm-usage',
-				'--disable-gpu',
-				'--disable-features=IsolateOrigins,site-per-process',
-				'--disable-web-security',
-			],
-		});
+		try {
+			browser = await puppeteer.launch({
+				headless: true,
+				ignoreDefaultArgs: ['--enable-automation'],
+				args: [
+					'--no-sandbox',
+					'--disable-setuid-sandbox',
+					'--disable-dev-shm-usage',
+					'--disable-gpu',
+					'--disable-features=IsolateOrigins,site-per-process',
+					'--disable-web-security',
+					'--single-process',
+					'--no-zygote',
+					'--disable-accelerated-2d-canvas',
+					'--disable-extensions',
+					'--disable-background-networking',
+					'--disable-background-timer-throttling',
+					'--disable-backgrounding-occluded-windows',
+					'--disable-breakpad',
+					'--disable-client-side-phishing-detection',
+					'--disable-component-extensions-with-background-pages',
+					'--disable-default-apps',
+					'--disable-domain-reliability',
+					'--disable-hang-monitor',
+					'--disable-ipc-flooding-protection',
+					'--disable-notifications',
+					'--disable-offer-store-unmasked-wallet-cards',
+					'--disable-popup-blocking',
+					'--disable-prompt-on-repost',
+					'--disable-renderer-backgrounding',
+					'--disable-sync',
+					'--disable-translate',
+					'--metrics-recording-only',
+					'--mute-audio',
+					'--no-default-browser-check',
+					'--no-first-run',
+					'--password-store=basic',
+					'--use-mock-keychain',
+				],
+				timeout: 15000, // Thời gian chờ ngắn hơn (15 giây)
+			});
+		} catch (puppeteerError) {
+			console.error('Không thể khởi động Puppeteer:', puppeteerError.message);
+			console.log('Không thể sử dụng Puppeteer, trả về mảng rỗng...');
+			return res.status(200).json([]);
+		}
 
 		const linkMap = new Map();
 
@@ -860,349 +931,6 @@ app.get('/special', async (req, res) => {
 		}
 
 		return res.status(200).json([]);
-	}
-});
-
-// Function to crawl pages from both URLs using Puppeteer
-const crawlPages = async (baseUrl, date) => {
-	try {
-		const baseWithoutDate = baseUrl.replace('/date', '');
-		const formattedDate = moment(date).format('YYYY/MM/DD');
-
-		let browser = null;
-		let linkMap = new Map();
-
-		try {
-			console.log(
-				`Đang khởi tạo Puppeteer cho ${baseUrl} ngày ${formattedDate}...`
-			);
-
-			browser = await puppeteer.launch({
-				headless: true,
-				args: [
-					'--no-sandbox',
-					'--disable-setuid-sandbox',
-					'--disable-dev-shm-usage',
-					'--disable-gpu',
-					'--disable-features=IsolateOrigins,site-per-process',
-					'--disable-web-security',
-				],
-			});
-
-			// Sử dụng vòng lặp vô hạn và dừng khi không tìm thấy link nào
-			let pageNumber = 1;
-			let shouldContinue = true;
-
-			while (shouldContinue) {
-				const pageUrl = `${baseUrl}/${formattedDate}?page=${pageNumber}`;
-				console.log(
-					`Đang tải trang ${pageNumber} từ ${baseUrl} cho ngày ${formattedDate}`
-				);
-
-				const page = await browser.newPage();
-
-				// Cấu hình trình duyệt giống người dùng thật
-				await page.setUserAgent(
-					'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-				);
-				await page.setViewport({ width: 1920, height: 1080 });
-
-				// Thiết lập các headers
-				await page.setExtraHTTPHeaders({
-					'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-				});
-
-				try {
-					// Mở trang web và đợi nó tải xong
-					await page.goto(pageUrl, {
-						waitUntil: 'networkidle2',
-						timeout: 60000,
-					});
-
-					// Thực thi JavaScript trong trang để tìm các link tải xuống
-					const links = await page.evaluate(() => {
-						return Array.from(
-							document.querySelectorAll('a[href*="magnet:"]')
-						).map((link) => link.getAttribute('href'));
-					});
-
-					console.log(`Tìm thấy ${links.length} links từ trang ${pageNumber}`);
-
-					// Nếu không còn links nào, dừng vòng lặp
-					if (links.length === 0) {
-						console.log(
-							`Không tìm thấy links, dừng tìm kiếm cho ${baseUrl} ngày ${formattedDate}`
-						);
-						await page.close();
-						shouldContinue = false;
-						break;
-					}
-
-					links.forEach((link) => {
-						const code = link.split('/').pop().split('.')[0];
-						linkMap.set(code, link);
-					});
-
-					await page.close();
-					pageNumber++;
-
-					// Giảm thời gian chờ giữa các trang từ 3s xuống 1.5s
-					console.log(`Chờ 1.5 giây trước khi tải trang tiếp theo...`);
-					await new Promise((resolve) => setTimeout(resolve, 1500));
-				} catch (pageError) {
-					console.error(`Lỗi khi tải trang ${pageUrl}:`, pageError.message);
-					await page.close();
-					shouldContinue = false;
-				}
-			}
-		} finally {
-			if (browser) {
-				console.log(`Đóng trình duyệt Puppeteer cho ${baseUrl}`);
-				await browser.close();
-			}
-		}
-
-		const uniqueLinks = Array.from(linkMap.values());
-		console.log(
-			`Tổng cộng ${uniqueLinks.length} links duy nhất từ ${baseUrl} cho ngày ${date}`
-		);
-
-		return uniqueLinks.map((link) => {
-			const code = link.split('/').pop().split('.')[0];
-			return {
-				url: link,
-				code: code,
-				source: baseUrl === BASE_URL ? 'jav' : 'ppv',
-				date: date,
-			};
-		});
-	} catch (error) {
-		console.error(`Lỗi khi crawl ${baseUrl} cho ngày ${date}:`, error);
-		return [];
-	}
-};
-
-// Get magnets from both sites for the last 3 days
-app.get('/get-all', async (req, res) => {
-	let browser = null;
-	try {
-		// Connect to MongoDB
-		const client = await connectToMongo();
-		const db = client.db(DB_NAME);
-		const collection = db.collection(COLLECTION_NAME);
-
-		// Get dates for today, yesterday, and the day before
-		const dates = [
-			moment().format('YYYY-MM-DD'),
-			moment().subtract(1, 'days').format('YYYY-MM-DD'),
-			moment().subtract(2, 'days').format('YYYY-MM-DD'),
-		];
-
-		console.log('Bắt đầu crawl dữ liệu cho các ngày:', dates);
-
-		let allMagnets = [];
-		let newMagnets = [];
-
-		// Crawl tuần tự và xử lý từng ngày
-		for (const date of dates) {
-			console.log(`\n==== Đang xử lý ngày: ${date} ====`);
-
-			// Xử lý tuần tự từng trang để tránh quá tải
-			console.log(`\n-- Crawl từ ${BASE_URL} cho ngày ${date} --`);
-			const javMagnets = await crawlPages(BASE_URL, date);
-
-			// Giảm thời gian chờ xuống còn 1.5 giây
-			console.log(`\nChờ 1.5 giây trước khi crawl trang tiếp theo...`);
-			await new Promise((resolve) => setTimeout(resolve, 1500));
-
-			console.log(`\n-- Crawl từ ${BASE_URL_P} cho ngày ${date} --`);
-			const ppvMagnets = await crawlPages(BASE_URL_P, date);
-
-			console.log(
-				`\nĐã tìm thấy ${javMagnets.length} links từ JAV và ${ppvMagnets.length} links từ PPV cho ngày ${date}`
-			);
-
-			// Kết hợp kết quả
-			const combinedMagnets = [...javMagnets, ...ppvMagnets];
-			allMagnets = [...allMagnets, ...combinedMagnets];
-
-			// Giảm thời gian chờ giữa các ngày xuống còn 1.5 giây
-			if (date !== dates[dates.length - 1]) {
-				console.log(`\nChờ 1.5 giây trước khi xử lý ngày tiếp theo...`);
-				await new Promise((resolve) => setTimeout(resolve, 1500));
-			}
-		}
-
-		console.log(
-			`\n==== Tổng cộng đã thu thập được ${allMagnets.length} links ====`
-		);
-		console.log(`\nBắt đầu kiểm tra và thêm vào MongoDB...`);
-
-		// Check for existing magnets and insert new ones
-		let processedCount = 0;
-		for (const magnet of allMagnets) {
-			processedCount++;
-			if (processedCount % 20 === 0) {
-				console.log(`Đã xử lý ${processedCount}/${allMagnets.length} links`);
-			}
-
-			const exists = await collection.findOne({
-				code: magnet.code,
-				source: magnet.source,
-			});
-
-			if (!exists) {
-				await collection.insertOne({
-					...magnet,
-					created_at: new Date(),
-				});
-				newMagnets.push(magnet);
-			}
-		}
-
-		console.log(
-			`\n==== Hoàn thành! Đã thêm ${newMagnets.length} links mới vào MongoDB ====`
-		);
-
-		// Chỉ trả về mảng các URL từ newMagnets
-		const urls = newMagnets.map((magnet) => magnet.url);
-		return res.status(200).json(urls);
-	} catch (error) {
-		console.error('Error in /get-all endpoint:', error);
-		return res.status(500).json({ error: error.message });
-	}
-});
-
-app.get('/get-western', async (req, res) => {
-	let browser = null;
-	try {
-		// Kết nối MongoDB
-		const client = await connectToMongo();
-		const db = client.db(DB_NAME);
-		const collection = db.collection(COLLECTION_NAME);
-
-		console.log('Bắt đầu crawl dữ liệu từ javdb.com/western');
-
-		// Khởi tạo puppeteer để crawl
-		browser = await puppeteer.launch({
-			headless: true,
-			args: [
-				'--no-sandbox',
-				'--disable-setuid-sandbox',
-				'--disable-dev-shm-usage',
-				'--disable-gpu',
-				'--disable-features=IsolateOrigins,site-per-process',
-				'--disable-web-security',
-			],
-		});
-
-		// Tạo trang mới
-		const page = await browser.newPage();
-
-		// Cấu hình trình duyệt giống người dùng thật
-		await page.setUserAgent(
-			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-		);
-		await page.setViewport({ width: 1920, height: 1080 });
-
-		// Thiết lập các headers
-		await page.setExtraHTTPHeaders({
-			'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-		});
-
-		// Truy cập trang javdb.com/western
-		console.log('Đang truy cập trang javdb.com/western');
-		await page.goto('https://javdb.com/western', {
-			waitUntil: 'networkidle2',
-			timeout: 60000,
-		});
-
-		// Lấy 10 href đầu tiên có chứa /v/
-		const hrefs = await page.evaluate(() => {
-			const links = Array.from(document.querySelectorAll('a[href*="/v/"]'));
-			return links.slice(0, 10).map((a) => a.href);
-		});
-
-		console.log(`Đã tìm thấy ${hrefs.length} links có chứa /v/`);
-
-		// Mảng chứa các magnet links mới
-		let newMagnets = [];
-
-		// Xử lý từng href
-		for (const href of hrefs) {
-			// Kiểm tra trong DB xem đã có href này chưa
-			const exists = await collection.findOne({ url: href });
-
-			if (exists) {
-				console.log(`Link ${href} đã tồn tại trong DB, bỏ qua.`);
-				continue;
-			}
-
-			console.log(`Đang xử lý link ${href}...`);
-
-			// Tạo trang mới để truy cập vào href
-			const itemPage = await browser.newPage();
-			await itemPage.setUserAgent(
-				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-			);
-			await itemPage.setViewport({ width: 1920, height: 1080 });
-
-			// Truy cập vào trang chi tiết
-			await itemPage.goto(href, {
-				waitUntil: 'networkidle2',
-				timeout: 60000,
-			});
-
-			// Tìm magnet link đầu tiên
-			const magnetLink = await itemPage.evaluate(() => {
-				// Tìm tất cả các elements có chứa magnet link
-				const magnets = Array.from(
-					document.querySelectorAll('a[href^="magnet:"]')
-				);
-				if (magnets.length > 0) {
-					return magnets[0].href;
-				}
-				return null;
-			});
-
-			await itemPage.close();
-
-			if (magnetLink) {
-				console.log(`Đã tìm thấy magnet link cho ${href}`);
-
-				// Lấy code từ URL
-				const code = href.split('/').pop();
-
-				// Thêm vào DB
-				await collection.insertOne({
-					url: href,
-					code: code,
-					magnet: magnetLink,
-					source: 'javdb-western',
-					created_at: new Date(),
-				});
-
-				newMagnets.push(magnetLink);
-			} else {
-				console.log(`Không tìm thấy magnet link cho ${href}`);
-			}
-
-			// Delay để tránh bị chặn
-			await new Promise((resolve) => setTimeout(resolve, 2000));
-		}
-
-		if (browser) {
-			await browser.close();
-		}
-
-		console.log(`Đã thêm ${newMagnets.length} magnet links mới vào DB`);
-		return res.status(200).json(newMagnets);
-	} catch (error) {
-		console.error('Error in /get-western endpoint:', error);
-		if (browser) {
-			await browser.close();
-		}
-		return res.status(500).json({ error: error.message });
 	}
 });
 
@@ -1511,17 +1239,52 @@ app.get('/24av/:name', async (req, res) => {
 		console.log(`Đang truy cập trang tìm kiếm: ${searchUrl}`);
 
 		// Khởi tạo trình duyệt
-		browser = await puppeteer.launch({
-			headless: true,
-			args: [
-				'--no-sandbox',
-				'--disable-setuid-sandbox',
-				'--disable-dev-shm-usage',
-				'--disable-gpu',
-				'--disable-features=IsolateOrigins,site-per-process',
-				'--disable-web-security',
-			],
-		});
+		try {
+			browser = await puppeteer.launch({
+				headless: true,
+				ignoreDefaultArgs: ['--enable-automation'],
+				args: [
+					'--no-sandbox',
+					'--disable-setuid-sandbox',
+					'--disable-dev-shm-usage',
+					'--disable-gpu',
+					'--disable-features=IsolateOrigins,site-per-process',
+					'--disable-web-security',
+					'--single-process',
+					'--no-zygote',
+					'--disable-accelerated-2d-canvas',
+					'--disable-extensions',
+					'--disable-background-networking',
+					'--disable-background-timer-throttling',
+					'--disable-backgrounding-occluded-windows',
+					'--disable-breakpad',
+					'--disable-client-side-phishing-detection',
+					'--disable-component-extensions-with-background-pages',
+					'--disable-default-apps',
+					'--disable-domain-reliability',
+					'--disable-hang-monitor',
+					'--disable-ipc-flooding-protection',
+					'--disable-notifications',
+					'--disable-offer-store-unmasked-wallet-cards',
+					'--disable-popup-blocking',
+					'--disable-prompt-on-repost',
+					'--disable-renderer-backgrounding',
+					'--disable-sync',
+					'--disable-translate',
+					'--metrics-recording-only',
+					'--mute-audio',
+					'--no-default-browser-check',
+					'--no-first-run',
+					'--password-store=basic',
+					'--use-mock-keychain',
+				],
+				timeout: 15000, // Thời gian chờ ngắn hơn (15 giây)
+			});
+		} catch (puppeteerError) {
+			console.error('Không thể khởi động Puppeteer:', puppeteerError.message);
+			console.log('Chuyển sang sử dụng axios...');
+			return await get24avWithAxios(req, res, name);
+		}
 
 		const searchPage = await browser.newPage();
 
@@ -2064,4 +1827,327 @@ process.on('SIGINT', async () => {
 process.on('uncaughtException', (err) => {
 	console.log({ err });
 	process.exit();
+});
+
+// Function to crawl pages from both URLs using Puppeteer
+const crawlPages = async (baseUrl, date) => {
+	try {
+		const baseWithoutDate = baseUrl.replace('/date', '');
+		const formattedDate = moment(date).format('YYYY/MM/DD');
+
+		let browser = null;
+		let linkMap = new Map();
+
+		try {
+			console.log(
+				`Đang khởi tạo Puppeteer cho ${baseUrl} ngày ${formattedDate}...`
+			);
+
+			browser = await puppeteer.launch({
+				headless: true,
+				ignoreDefaultArgs: ['--enable-automation'],
+				args: [
+					'--no-sandbox',
+					'--disable-setuid-sandbox',
+					'--disable-dev-shm-usage',
+					'--disable-gpu',
+					'--disable-features=IsolateOrigins,site-per-process',
+					'--disable-web-security',
+					'--single-process',
+					'--no-zygote',
+					'--disable-accelerated-2d-canvas',
+					'--disable-extensions',
+					'--disable-background-networking',
+					'--disable-background-timer-throttling',
+					'--disable-backgrounding-occluded-windows',
+					'--disable-breakpad',
+					'--disable-client-side-phishing-detection',
+					'--disable-component-extensions-with-background-pages',
+					'--disable-default-apps',
+					'--disable-domain-reliability',
+					'--disable-hang-monitor',
+					'--disable-ipc-flooding-protection',
+					'--disable-notifications',
+					'--disable-offer-store-unmasked-wallet-cards',
+					'--disable-popup-blocking',
+					'--disable-prompt-on-repost',
+					'--disable-renderer-backgrounding',
+					'--disable-sync',
+					'--disable-translate',
+					'--metrics-recording-only',
+					'--mute-audio',
+					'--no-default-browser-check',
+					'--no-first-run',
+					'--password-store=basic',
+					'--use-mock-keychain',
+				],
+				timeout: 15000, // Thời gian chờ ngắn hơn (15 giây)
+			});
+		} catch (puppeteerError) {
+			console.error(
+				`Không thể khởi động Puppeteer cho ${baseUrl}: `,
+				puppeteerError.message
+			);
+			console.log('Trả về mảng rỗng do không thể khởi động Puppeteer');
+			return [];
+		}
+
+		// Sử dụng vòng lặp vô hạn và dừng khi không tìm thấy link nào
+		let pageNumber = 1;
+		let shouldContinue = true;
+
+		while (shouldContinue) {
+			const pageUrl = `${baseUrl}/${formattedDate}?page=${pageNumber}`;
+			console.log(
+				`Đang tải trang ${pageNumber} từ ${baseUrl} cho ngày ${formattedDate}`
+			);
+
+			const page = await browser.newPage();
+
+			// Cấu hình trình duyệt giống người dùng thật
+			await page.setUserAgent(
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+			);
+			await page.setViewport({ width: 1920, height: 1080 });
+
+			// Thiết lập các headers
+			await page.setExtraHTTPHeaders({
+				'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+			});
+
+			try {
+				// Mở trang web và đợi nó tải xong
+				await page.goto(pageUrl, {
+					waitUntil: 'networkidle2',
+					timeout: 60000,
+				});
+
+				// Thực thi JavaScript trong trang để tìm các link tải xuống
+				const links = await page.evaluate(() => {
+					return Array.from(
+						document.querySelectorAll('a[href*="magnet:"]')
+					).map((link) => link.getAttribute('href'));
+				});
+
+				console.log(`Tìm thấy ${links.length} links từ trang ${pageNumber}`);
+
+				// Nếu không còn links nào, dừng vòng lặp
+				if (links.length === 0) {
+					console.log(
+						`Không tìm thấy links, dừng tìm kiếm cho ${baseUrl} ngày ${formattedDate}`
+					);
+					await page.close();
+					shouldContinue = false;
+					break;
+				}
+
+				links.forEach((link) => {
+					const code = link.split('/').pop().split('.')[0];
+					linkMap.set(code, link);
+				});
+
+				await page.close();
+				pageNumber++;
+
+				// Giảm thời gian chờ giữa các trang từ 3s xuống 1.5s
+				console.log(`Chờ 1.5 giây trước khi tải trang tiếp theo...`);
+				await new Promise((resolve) => setTimeout(resolve, 1500));
+			} catch (pageError) {
+				console.error(`Lỗi khi tải trang ${pageUrl}:`, pageError.message);
+				await page.close();
+				shouldContinue = false;
+			}
+		}
+
+		if (browser) {
+			console.log(`Đóng trình duyệt Puppeteer cho ${baseUrl}`);
+			await browser.close();
+		}
+
+		const uniqueLinks = Array.from(linkMap.values());
+		console.log(
+			`Tổng cộng ${uniqueLinks.length} links duy nhất từ ${baseUrl} cho ngày ${date}`
+		);
+
+		return uniqueLinks.map((link) => {
+			const code = link.split('/').pop().split('.')[0];
+			return {
+				url: link,
+				code: code,
+				source: baseUrl === BASE_URL ? 'jav' : 'ppv',
+				date: date,
+			};
+		});
+	} catch (error) {
+		console.error(`Lỗi khi crawl ${baseUrl} cho ngày ${date}:`, error);
+		return [];
+	}
+};
+
+app.get('/get-western', async (req, res) => {
+	let browser = null;
+	try {
+		// Kết nối MongoDB
+		const client = await connectToMongo();
+		const db = client.db(DB_NAME);
+		const collection = db.collection(COLLECTION_NAME);
+
+		console.log('Bắt đầu crawl dữ liệu từ javdb.com/western');
+
+		// Khởi tạo puppeteer để crawl
+		try {
+			browser = await puppeteer.launch({
+				headless: true,
+				ignoreDefaultArgs: ['--enable-automation'],
+				args: [
+					'--no-sandbox',
+					'--disable-setuid-sandbox',
+					'--disable-dev-shm-usage',
+					'--disable-gpu',
+					'--disable-features=IsolateOrigins,site-per-process',
+					'--disable-web-security',
+					'--single-process',
+					'--no-zygote',
+					'--disable-accelerated-2d-canvas',
+					'--disable-extensions',
+					'--disable-background-networking',
+					'--disable-background-timer-throttling',
+					'--disable-backgrounding-occluded-windows',
+					'--disable-breakpad',
+					'--disable-client-side-phishing-detection',
+					'--disable-component-extensions-with-background-pages',
+					'--disable-default-apps',
+					'--disable-domain-reliability',
+					'--disable-hang-monitor',
+					'--disable-ipc-flooding-protection',
+					'--disable-notifications',
+					'--disable-offer-store-unmasked-wallet-cards',
+					'--disable-popup-blocking',
+					'--disable-prompt-on-repost',
+					'--disable-renderer-backgrounding',
+					'--disable-sync',
+					'--disable-translate',
+					'--metrics-recording-only',
+					'--mute-audio',
+					'--no-default-browser-check',
+					'--no-first-run',
+					'--password-store=basic',
+					'--use-mock-keychain',
+				],
+				timeout: 15000, // Thời gian chờ ngắn hơn (15 giây)
+			});
+		} catch (puppeteerError) {
+			console.error('Không thể khởi động Puppeteer:', puppeteerError.message);
+			console.log('Không thể sử dụng Puppeteer, trả về mảng rỗng...');
+			return res.status(200).json([]);
+		}
+
+		// Tạo trang mới
+		const page = await browser.newPage();
+
+		// Cấu hình trình duyệt giống người dùng thật
+		await page.setUserAgent(
+			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+		);
+		await page.setViewport({ width: 1920, height: 1080 });
+
+		// Thiết lập các headers
+		await page.setExtraHTTPHeaders({
+			'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+		});
+
+		// Truy cập trang javdb.com/western
+		console.log('Đang truy cập trang javdb.com/western');
+		await page.goto('https://javdb.com/western', {
+			waitUntil: 'networkidle2',
+			timeout: 60000,
+		});
+
+		// Lấy 10 href đầu tiên có chứa /v/
+		const hrefs = await page.evaluate(() => {
+			const links = Array.from(document.querySelectorAll('a[href*="/v/"]'));
+			return links.slice(0, 10).map((a) => a.href);
+		});
+
+		console.log(`Đã tìm thấy ${hrefs.length} links có chứa /v/`);
+
+		// Mảng chứa các magnet links mới
+		let newMagnets = [];
+
+		// Xử lý từng href
+		for (const href of hrefs) {
+			// Kiểm tra trong DB xem đã có href này chưa
+			const exists = await collection.findOne({ url: href });
+
+			if (exists) {
+				console.log(`Link ${href} đã tồn tại trong DB, bỏ qua.`);
+				continue;
+			}
+
+			console.log(`Đang xử lý link ${href}...`);
+
+			// Tạo trang mới để truy cập vào href
+			const itemPage = await browser.newPage();
+			await itemPage.setUserAgent(
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+			);
+			await itemPage.setViewport({ width: 1920, height: 1080 });
+
+			// Truy cập vào trang chi tiết
+			await itemPage.goto(href, {
+				waitUntil: 'networkidle2',
+				timeout: 60000,
+			});
+
+			// Tìm magnet link đầu tiên
+			const magnetLink = await itemPage.evaluate(() => {
+				// Tìm tất cả các elements có chứa magnet link
+				const magnets = Array.from(
+					document.querySelectorAll('a[href^="magnet:"]')
+				);
+				if (magnets.length > 0) {
+					return magnets[0].href;
+				}
+				return null;
+			});
+
+			await itemPage.close();
+
+			if (magnetLink) {
+				console.log(`Đã tìm thấy magnet link cho ${href}`);
+
+				// Lấy code từ URL
+				const code = href.split('/').pop();
+
+				// Thêm vào DB
+				await collection.insertOne({
+					url: href,
+					code: code,
+					magnet: magnetLink,
+					source: 'javdb-western',
+					created_at: new Date(),
+				});
+
+				newMagnets.push(magnetLink);
+			} else {
+				console.log(`Không tìm thấy magnet link cho ${href}`);
+			}
+
+			// Delay để tránh bị chặn
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+		}
+
+		if (browser) {
+			await browser.close();
+		}
+
+		console.log(`Đã thêm ${newMagnets.length} magnet links mới vào DB`);
+		return res.status(200).json(newMagnets);
+	} catch (error) {
+		console.error('Error in /get-western endpoint:', error);
+		if (browser) {
+			await browser.close();
+		}
+		return res.status(500).json({ error: error.message });
+	}
 });
