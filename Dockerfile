@@ -37,8 +37,11 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 COPY package*.json ./
 RUN npm ci
 
-# Sao chép mã nguồn ứng dụng
+# Sao chép mã nguồn ứng dụng và các file cấu hình TypeScript
 COPY . .
+
+# Biên dịch TypeScript sang JavaScript
+RUN npm run build
 
 # Thiết lập môi trường cho ứng dụng
 ENV PORT=3000
@@ -58,4 +61,5 @@ RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
 # Chạy ứng dụng với user không phải root
 USER pptruser
 
-CMD ["node", "index.js"]
+# Chạy ứng dụng từ file JS đã được biên dịch
+CMD ["node", "dist/index.js"]
