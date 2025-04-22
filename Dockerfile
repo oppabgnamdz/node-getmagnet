@@ -3,7 +3,7 @@ FROM node:18-slim
 WORKDIR /app
 
 # Cài đặt Chrome và các phụ thuộc
-RUN apt-get update && apt-get install -y wget gnupg && \
+RUN apt-get update && apt-get install -y wget gnupg build-essential && \
     wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add - && \
     echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google.list && \
     apt-get update && \
@@ -33,15 +33,14 @@ RUN apt-get update && apt-get install -y wget gnupg && \
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
-# Sao chép package.json và cài đặt dependencies
-COPY package*.json ./
-RUN npm ci
-
-# Sao chép mã nguồn ứng dụng và các file cấu hình TypeScript
+# Sao chép toàn bộ mã nguồn trước để tránh lỗi thiếu file khi build
 COPY . .
 
-# Biên dịch TypeScript sang JavaScript
-RUN npm run build
+# Cài đặt dependencies với --legacy-peer-deps để tránh lỗi phụ thuộc
+RUN npm ci --legacy-peer-deps
+
+# Biên dịch TypeScript sang JavaScript (dùng tsc trực tiếp để debug dễ hơn)
+RUN npx tsc
 
 # Thiết lập môi trường cho ứng dụng
 ENV PORT=3000
