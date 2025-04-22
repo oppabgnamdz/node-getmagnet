@@ -36,19 +36,20 @@ ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 # Copy package files first to leverage Docker cache
 COPY package*.json ./
 
-# Install dependencies but skip the postinstall script that runs the build
+# Install dependencies including TypeScript
 RUN npm ci --ignore-scripts
 
 # Copy source code after dependencies installed
 COPY . .
 
-# Build TypeScript code separately
-RUN npx tsc
+# Skip TypeScript compilation for now (we'll use ts-node to run directly)
+# RUN npx tsc
 
 # Thiết lập môi trường cho ứng dụng
 ENV PORT=3000
 ENV LOGIN=e5547481b0b75c2846ed
 ENV PASS=p164V8Md7Whr6Jl
+ENV TS_NODE_TRANSPILE_ONLY=true
 
 # Mở cổng để truy cập ứng dụng
 EXPOSE $PORT
@@ -63,5 +64,5 @@ RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
 # Chạy ứng dụng với user không phải root
 USER pptruser
 
-# Chạy ứng dụng từ file JS đã được biên dịch
-CMD ["node", "dist/index.js"]
+# Run the application using ts-node instead of compiled JavaScript
+CMD ["npx", "ts-node", "--transpile-only", "index.ts"]
