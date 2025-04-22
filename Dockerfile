@@ -33,13 +33,16 @@ RUN apt-get update && apt-get install -y wget gnupg build-essential && \
 ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/google-chrome-stable
 
-# Sao chép toàn bộ mã nguồn trước để tránh lỗi thiếu file khi build
+# Copy package files first to leverage Docker cache
+COPY package*.json ./
+
+# Install dependencies but skip the postinstall script that runs the build
+RUN npm ci --ignore-scripts
+
+# Copy source code after dependencies installed
 COPY . .
 
-# Cài đặt dependencies với --legacy-peer-deps để tránh lỗi phụ thuộc
-RUN npm ci --legacy-peer-deps
-
-# Biên dịch TypeScript sang JavaScript (dùng tsc trực tiếp để debug dễ hơn)
+# Build TypeScript code separately
 RUN npx tsc
 
 # Thiết lập môi trường cho ứng dụng
