@@ -59,7 +59,10 @@ RUN groupadd -r pptruser && useradd -r -g pptruser -G audio,video pptruser \
     && mkdir -p /home/pptruser/Downloads \
     && mkdir -p /home/pptruser/.cache/puppeteer \
     && chown -R pptruser:pptruser /home/pptruser \
-    && chown -R pptruser:pptruser /app
+    && chown -R pptruser:pptruser /app \
+    && chmod -R 755 /app \
+    && chown -R pptruser:pptruser /usr/bin/google-chrome-stable \
+    && chmod 755 /usr/bin/google-chrome-stable
 
 # Chạy ứng dụng với user không phải root
 USER pptruser

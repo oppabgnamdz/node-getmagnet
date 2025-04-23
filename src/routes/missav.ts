@@ -30,7 +30,8 @@ router.get('/:name', async (req, res) => {
 
 		// Cố gắng chạy trực tiếp mà không cần chỉ định executablePath
 		browser = await puppeteer.launch({
-			headless: true,
+			headless: "new",
+			executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
 			args: [
 				'--no-sandbox',
 				'--disable-setuid-sandbox',
@@ -38,7 +39,10 @@ router.get('/:name', async (req, res) => {
 				'--disable-gpu',
 				'--disable-features=IsolateOrigins,site-per-process',
 				'--disable-web-security',
+				'--single-process', // Thêm tùy chọn này để khắc phục lỗi EAGAIN
+				'--no-zygote',      // Thêm tùy chọn này để tránh các vấn đề về quyền truy cập
 			],
+			ignoreDefaultArgs: ['--disable-extensions'],
 		});
 
 		const page = await browser.newPage();
