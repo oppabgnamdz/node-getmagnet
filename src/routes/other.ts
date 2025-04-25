@@ -121,7 +121,8 @@ router.get('/get-western', async (req, res) => {
 
 		// Khởi tạo puppeteer để crawl
 		browser = await puppeteer.launch({
-			headless: true,
+			headless: "new",
+			executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
 			args: [
 				'--no-sandbox',
 				'--disable-setuid-sandbox',
@@ -129,7 +130,10 @@ router.get('/get-western', async (req, res) => {
 				'--disable-gpu',
 				'--disable-features=IsolateOrigins,site-per-process',
 				'--disable-web-security',
+				'--single-process', // Thêm tùy chọn này để khắc phục lỗi EAGAIN
+				'--no-zygote',      // Thêm tùy chọn này để tránh các vấn đề về quyền truy cập
 			],
+			ignoreDefaultArgs: ['--disable-extensions'],
 		});
 
 		// Tạo trang mới
