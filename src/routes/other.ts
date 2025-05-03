@@ -1081,9 +1081,13 @@ router.get('/ffjav', async (req, res) => {
 
 		console.log('Bắt đầu crawl dữ liệu từ ffjav.com/jav-torrent');
 
-		// Khởi tạo puppeteer để crawl
+		// Mặc định là 10 trang, nhưng có thể thay đổi qua tham số query
+		const pagesToCrawl = req.query.pages ? parseInt(req.query.pages as string) : 10;
+		console.log(`Sẽ crawl ${pagesToCrawl} trang từ ffjav.com/jav-torrent`);
+
+		// Khởi tạo puppeteer để crawl với timeout cao hơn
 		browser = await puppeteer.launch({
-			headless: 'new',
+			headless: "new",
 			executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
 			args: [
 				'--no-sandbox',
@@ -1092,121 +1096,140 @@ router.get('/ffjav', async (req, res) => {
 				'--disable-gpu',
 				'--disable-features=IsolateOrigins,site-per-process',
 				'--disable-web-security',
-				'--single-process',
-				'--no-zygote',
+				'--single-process', 
+				'--no-zygote',  
 			],
 			ignoreDefaultArgs: ['--disable-extensions'],
 		});
 
-		// Mảng chứa các download links mới
-		let newDownloadLinks: string[] = [];
+		// Mảng chứa các download links
 		let allDownloadLinks: string[] = [];
 
-		// Xử lý từ page 1 đến page 10
-		for (let page = 1; page <= 10; page++) {
-			console.log(`\n==== Đang xử lý trang ${page}/10 ====`);
-
+		// Xử lý từng trang - giới hạn số trang để tránh timeout
+		for (let page = 1; page <= pagesToCrawl; page++) {
+			console.log(`\n==== Đang xử lý trang ${page}/${pagesToCrawl} ====`);
+			
 			// URL của trang
-			const pageUrl =
-				page === 1
-					? 'https://ffjav.com/jav-torrent'
-					: `https://ffjav.com/jav-torrent/page/${page}`;
-
+			const pageUrl = page === 1 
+				? 'https://ffjav.com/jav-torrent' 
+				: `https://ffjav.com/jav-torrent/page/${page}`;
+			
 			// Tạo trang mới
 			const pageBrowser = await browser.newPage();
 
-			// Cấu hình trình duyệt giống người dùng thật
-			await pageBrowser.setUserAgent(
-				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-			);
-			await pageBrowser.setViewport({ width: 1920, height: 1080 });
-
-			// Thiết lập các headers
-			await pageBrowser.setExtraHTTPHeaders({
-				'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-			});
-
-			// Truy cập trang
-			console.log(`Đang truy cập trang: ${pageUrl}`);
-			await pageBrowser.goto(pageUrl, {
-				waitUntil: 'networkidle2',
-				timeout: 60000,
-			});
-
-			// Lấy tất cả các href có chứa /download/2025/
-			const links = await pageBrowser.evaluate(() => {
-				const downloadLinks = Array.from(
-					document.querySelectorAll('a[href*="/download/2025/"]')
+			try {
+				// Cấu hình trình duyệt giống người dùng thật
+				await pageBrowser.setUserAgent(
+					'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 				);
-				return downloadLinks.map((a) => a.href);
-			});
+				await pageBrowser.setViewport({ width: 1920, height: 1080 });
 
-			console.log(
-				`Đã tìm thấy ${links.length} links có chứa /download/2025/ từ trang ${page}`
-			);
-
-			// Thêm vào mảng allDownloadLinks
-			allDownloadLinks = [...allDownloadLinks, ...links];
-
-			// Đóng trang
-			await pageBrowser.close();
-
-			// Delay để tránh bị chặn
-			if (page < 10) {
-				console.log(`Chờ 2 giây trước khi xử lý trang tiếp theo...`);
-				await new Promise((resolve) => setTimeout(resolve, 2000));
-			}
-		}
-
-		console.log(
-			`\n==== Tổng cộng đã thu thập được ${allDownloadLinks.length} download links ====`
-		);
-		console.log(`\nBắt đầu kiểm tra và thêm vào MongoDB...`);
-
-		// Kiểm tra từng link và thêm vào DB nếu chưa tồn tại
-		let processedCount = 0;
-		for (const link of allDownloadLinks) {
-			processedCount++;
-			if (processedCount % 20 === 0) {
-				console.log(
-					`Đã xử lý ${processedCount}/${allDownloadLinks.length} links`
-				);
-			}
-
-			// Trích xuất code từ URL
-			const codeMatch = link.match(/\/download\/2025\/([^\/]+)/);
-			if (!codeMatch || !codeMatch[1]) {
-				console.log(`Bỏ qua link không hợp lệ: ${link}`);
-				continue;
-			}
-
-			const code = link;
-
-			// Kiểm tra xem link đã có trong DB chưa
-			const exists = await collection.findOne({
-				code: code,
-				source: 'ffjav',
-			});
-
-			if (!exists) {
-				await collection.insertOne({
-					url: link,
-					code: code,
-					source: 'ffjav',
-					created_at: new Date(),
+				// Thiết lập các headers
+				await pageBrowser.setExtraHTTPHeaders({
+					'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
 				});
-				newDownloadLinks.push(link);
+
+				// Truy cập trang với timeout cao hơn
+				console.log(`Đang truy cập trang: ${pageUrl}`);
+				await pageBrowser.goto(pageUrl, {
+					waitUntil: 'networkidle2',
+					timeout: 90000, // Tăng timeout lên 90 giây
+				});
+
+				// Lấy tất cả các href có chứa /download/2025/
+				const links = await pageBrowser.evaluate(() => {
+					const downloadLinks = Array.from(document.querySelectorAll('a[href*="/download/2025/"]'));
+					return downloadLinks.map((a) => a.href);
+				});
+
+				console.log(`Đã tìm thấy ${links.length} links có chứa /download/2025/ từ trang ${page}`);
+				
+				// Thêm vào mảng allDownloadLinks
+				allDownloadLinks = [...allDownloadLinks, ...links];
+			} catch (pageError) {
+				console.error(`Lỗi khi xử lý trang ${page}:`, pageError.message);
+			} finally {
+				// Đảm bảo đóng trang luôn được thực hiện
+				await pageBrowser.close();
+			}
+
+			// Delay để tránh bị chặn - giảm xuống còn 1 giây
+			if (page < pagesToCrawl) {
+				console.log(`Chờ 1 giây trước khi xử lý trang tiếp theo...`);
+				await new Promise((resolve) => setTimeout(resolve, 1000));
 			}
 		}
 
+		console.log(`\n==== Tổng cộng đã thu thập được ${allDownloadLinks.length} download links ====`);
+		
+		// Đóng browser sau khi đã lấy xong tất cả links
 		if (browser) {
 			await browser.close();
+			browser = null;
+		}
+		
+		// Nếu không tìm thấy links nào
+		if (allDownloadLinks.length === 0) {
+			return res.status(200).json({ 
+				message: "Không tìm thấy links nào", 
+				links: [] 
+			});
+		}
+		
+		console.log(`\nBắt đầu kiểm tra và thêm vào MongoDB...`);
+
+		// Xử lý các links - tối ưu hóa với bulk operations
+		// Trích xuất code từ URL và chuẩn bị dữ liệu
+		const linksToProcess = allDownloadLinks.map(link => {
+			const codeMatch = link.match(/\/download\/2025\/([^\/]+)/);
+			const extractedCode = codeMatch && codeMatch[1] ? codeMatch[1] : link;
+			return {
+				url: link,
+				code: extractedCode,
+				source: 'ffjav',
+				created_at: new Date()
+			};
+		});
+
+		// Lọc các links không hợp lệ
+		const validLinks = linksToProcess.filter(item => item.code);
+		console.log(`Có ${validLinks.length} links hợp lệ sau khi xử lý`);
+
+		// Nếu không còn links hợp lệ nào
+		if (validLinks.length === 0) {
+			return res.status(200).json({ 
+				message: "Không có links hợp lệ để xử lý", 
+				links: [] 
+			});
 		}
 
-		console.log(
-			`\n==== Hoàn thành! Đã thêm ${newDownloadLinks.length} download links mới vào DB ====`
-		);
-		return res.status(200).json(newDownloadLinks);
+		// Lấy tất cả codes để kiểm tra trong DB một lần
+		const codes = validLinks.map(item => item.code);
+		
+		// Kiểm tra tất cả codes trong DB cùng một lúc
+		const existingDocs = await collection.find({
+			code: { $in: codes },
+			source: 'ffjav'
+		}).toArray();
+		
+		// Tạo map các code đã tồn tại để kiểm tra nhanh hơn
+		const existingCodes = new Set(existingDocs.map(doc => doc.code));
+		
+		// Lọc ra các links chưa có trong DB
+		const newLinks = validLinks.filter(item => !existingCodes.has(item.code));
+		
+		// Thêm vào DB nếu có links mới
+		if (newLinks.length > 0) {
+			const result = await collection.insertMany(newLinks);
+			console.log(`\n==== Hoàn thành! Đã thêm ${result.insertedCount} download links mới vào DB ====`);
+			
+			// Trả về các URL mới đã thêm
+			const newUrls = newLinks.map(item => item.url);
+			return res.status(200).json(newUrls);
+		} else {
+			console.log(`\n==== Không có links mới để thêm vào DB ====`);
+			return res.status(200).json([]);
+		}
 	} catch (error) {
 		console.error('Error in /ffjav endpoint:', error);
 		if (browser) {
