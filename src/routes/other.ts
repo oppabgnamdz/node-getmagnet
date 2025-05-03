@@ -121,7 +121,7 @@ router.get('/get-western', async (req, res) => {
 
 		// Khởi tạo puppeteer để crawl
 		browser = await puppeteer.launch({
-			headless: "new",
+			headless: 'new',
 			executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
 			args: [
 				'--no-sandbox',
@@ -131,7 +131,7 @@ router.get('/get-western', async (req, res) => {
 				'--disable-features=IsolateOrigins,site-per-process',
 				'--disable-web-security',
 				'--single-process', // Thêm tùy chọn này để khắc phục lỗi EAGAIN
-				'--no-zygote',      // Thêm tùy chọn này để tránh các vấn đề về quyền truy cập
+				'--no-zygote', // Thêm tùy chọn này để tránh các vấn đề về quyền truy cập
 			],
 			ignoreDefaultArgs: ['--disable-extensions'],
 		});
@@ -1067,6 +1067,152 @@ router.get('/release-24av', async (req, res) => {
 	} catch (error) {
 		console.error('Lỗi khi xử lý request:', error);
 		return res.status(500).json([]);
+	}
+});
+
+// Get ffjav content
+router.get('/ffjav', async (req, res) => {
+	let browser = null;
+	try {
+		// Kết nối MongoDB
+		const client = await connectToMongo();
+		const db = client.db(DB_NAME);
+		const collection = db.collection(COLLECTION_NAME);
+
+		console.log('Bắt đầu crawl dữ liệu từ ffjav.com/jav-torrent');
+
+		// Khởi tạo puppeteer để crawl
+		browser = await puppeteer.launch({
+			headless: 'new',
+			executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+			args: [
+				'--no-sandbox',
+				'--disable-setuid-sandbox',
+				'--disable-dev-shm-usage',
+				'--disable-gpu',
+				'--disable-features=IsolateOrigins,site-per-process',
+				'--disable-web-security',
+				'--single-process',
+				'--no-zygote',
+			],
+			ignoreDefaultArgs: ['--disable-extensions'],
+		});
+
+		// Mảng chứa các download links mới
+		let newDownloadLinks: string[] = [];
+		let allDownloadLinks: string[] = [];
+
+		// Xử lý từ page 1 đến page 10
+		for (let page = 1; page <= 10; page++) {
+			console.log(`\n==== Đang xử lý trang ${page}/10 ====`);
+
+			// URL của trang
+			const pageUrl =
+				page === 1
+					? 'https://ffjav.com/jav-torrent'
+					: `https://ffjav.com/jav-torrent/page/${page}`;
+
+			// Tạo trang mới
+			const pageBrowser = await browser.newPage();
+
+			// Cấu hình trình duyệt giống người dùng thật
+			await pageBrowser.setUserAgent(
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+			);
+			await pageBrowser.setViewport({ width: 1920, height: 1080 });
+
+			// Thiết lập các headers
+			await pageBrowser.setExtraHTTPHeaders({
+				'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+			});
+
+			// Truy cập trang
+			console.log(`Đang truy cập trang: ${pageUrl}`);
+			await pageBrowser.goto(pageUrl, {
+				waitUntil: 'networkidle2',
+				timeout: 60000,
+			});
+
+			// Lấy tất cả các href có chứa /download/2025/
+			const links = await pageBrowser.evaluate(() => {
+				const downloadLinks = Array.from(
+					document.querySelectorAll('a[href*="/download/2025/"]')
+				);
+				return downloadLinks.map((a) => a.href);
+			});
+
+			console.log(
+				`Đã tìm thấy ${links.length} links có chứa /download/2025/ từ trang ${page}`
+			);
+
+			// Thêm vào mảng allDownloadLinks
+			allDownloadLinks = [...allDownloadLinks, ...links];
+
+			// Đóng trang
+			await pageBrowser.close();
+
+			// Delay để tránh bị chặn
+			if (page < 10) {
+				console.log(`Chờ 2 giây trước khi xử lý trang tiếp theo...`);
+				await new Promise((resolve) => setTimeout(resolve, 2000));
+			}
+		}
+
+		console.log(
+			`\n==== Tổng cộng đã thu thập được ${allDownloadLinks.length} download links ====`
+		);
+		console.log(`\nBắt đầu kiểm tra và thêm vào MongoDB...`);
+
+		// Kiểm tra từng link và thêm vào DB nếu chưa tồn tại
+		let processedCount = 0;
+		for (const link of allDownloadLinks) {
+			processedCount++;
+			if (processedCount % 20 === 0) {
+				console.log(
+					`Đã xử lý ${processedCount}/${allDownloadLinks.length} links`
+				);
+			}
+
+			// Trích xuất code từ URL
+			const codeMatch = link.match(/\/download\/2025\/([^\/]+)/);
+			if (!codeMatch || !codeMatch[1]) {
+				console.log(`Bỏ qua link không hợp lệ: ${link}`);
+				continue;
+			}
+
+			const code = link;
+
+			// Kiểm tra xem link đã có trong DB chưa
+			const exists = await collection.findOne({
+				code: code,
+				source: 'ffjav',
+			});
+
+			if (!exists) {
+				await collection.insertOne({
+					url: link,
+					code: code,
+					source: 'ffjav',
+					created_at: new Date(),
+				});
+				newDownloadLinks.push(link);
+			}
+		}
+
+		if (browser) {
+			await browser.close();
+		}
+
+		console.log(
+			`\n==== Hoàn thành! Đã thêm ${newDownloadLinks.length} download links mới vào DB ====`
+		);
+		return res.status(200).json(newDownloadLinks);
+	} catch (error) {
+		console.error('Error in /ffjav endpoint:', error);
+		if (browser) {
+			await browser.close();
+		}
+		return res.status(500).json({ error: error.message });
 	}
 });
 
