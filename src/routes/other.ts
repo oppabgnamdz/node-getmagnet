@@ -1211,18 +1211,16 @@ router.get('/ffjav', async (req, res) => {
 		// Xử lý các links - tối ưu hóa với bulk operations
 		// Trích xuất code từ URL và chuẩn bị dữ liệu
 		const linksToProcess = allDownloadLinks.map((link) => {
-			const codeMatch = link.match(/\/download\/2025\/([^\/]+)/);
-			const extractedCode = codeMatch && codeMatch[1] ? codeMatch[1] : link;
 			return {
 				url: link,
-				code: extractedCode,
+				code: link,
 				source: 'ffjav',
 				created_at: new Date(),
 			};
 		});
 
 		// Lọc các links không hợp lệ
-		const validLinks = linksToProcess.filter((item) => item.code);
+		const validLinks = linksToProcess.filter((item) => item.url);
 		console.log(`Có ${validLinks.length} links hợp lệ sau khi xử lý`);
 
 		// Nếu không còn links hợp lệ nào
@@ -1234,7 +1232,8 @@ router.get('/ffjav', async (req, res) => {
 		}
 
 		// Lấy tất cả codes để kiểm tra trong DB một lần
-		const codes = validLinks.map((item) => item.code);
+		console.log({ validLinks });
+		const codes = validLinks.map((item) => item.url);
 
 		// Kiểm tra tất cả codes trong DB cùng một lúc
 		const existingDocs = await collection
@@ -1245,10 +1244,10 @@ router.get('/ffjav', async (req, res) => {
 			.toArray();
 
 		// Tạo map các code đã tồn tại để kiểm tra nhanh hơn
-		const existingCodes = new Set(existingDocs.map((doc) => doc.code));
+		const existingCodes = new Set(existingDocs.map((doc) => doc.url));
 
 		// Lọc ra các links chưa có trong DB
-		const newLinks = validLinks.filter((item) => !existingCodes.has(item.code));
+		const newLinks = validLinks.filter((item) => !existingCodes.has(item.url));
 
 		// Thêm vào DB nếu có links mới
 		if (newLinks.length > 0) {
