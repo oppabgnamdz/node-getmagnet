@@ -1,14 +1,14 @@
 import express from 'express';
 import cheerio from 'cheerio';
 import axios from 'axios';
-import puppeteer from 'puppeteer';
+import puppeteer, { Browser } from 'puppeteer';
 import { VideoData, SurritInfo } from '../types';
 
 const router = express.Router();
 
 // MissAV route - moved from /missav/:name to /:name since we're already mounting under /missav
 router.get('/:name', async (req, res) => {
-	let browser = null;
+	let browser: Browser | null = null;
 	try {
 		let name = req.params.name;
 
@@ -28,186 +28,219 @@ router.get('/:name', async (req, res) => {
 		const url = `https://missav123.com/vi/${name}`;
 		console.log(`Đang truy cập: ${url} bằng Puppeteer...`);
 
-		// Cố gắng chạy trực tiếp mà không cần chỉ định executablePath
-		browser = await puppeteer.launch({
-			headless: "new",
-			executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
-			args: [
-				'--no-sandbox',
-				'--disable-setuid-sandbox',
-				'--disable-dev-shm-usage',
-				'--disable-gpu',
-				'--disable-features=IsolateOrigins,site-per-process',
-				'--disable-web-security',
-				'--single-process', // Thêm tùy chọn này để khắc phục lỗi EAGAIN
-				'--no-zygote',      // Thêm tùy chọn này để tránh các vấn đề về quyền truy cập
-			],
-			ignoreDefaultArgs: ['--disable-extensions'],
-		});
-
-		const page = await browser.newPage();
-
-		// Mảng lưu các URLs m3u8 đã phát hiện
-		let m3u8Urls: string[] = [];
-
-		// Lắng nghe tất cả các network requests
-		await page.setRequestInterception(true);
-
-		page.on('request', (request) => {
-			const url = request.url();
-			if (url.includes('.m3u8')) {
-				console.log(`Phát hiện m3u8 URL trong request: ${url}`);
-				if (!m3u8Urls.includes(url)) {
-					m3u8Urls.push(url);
-				}
-			}
-			request.continue();
-		});
-
-		page.on('response', async (response) => {
-			const url = response.url();
-			if (url.includes('.m3u8')) {
-				console.log(`Phát hiện m3u8 URL trong response: ${url}`);
-				if (!m3u8Urls.includes(url)) {
-					m3u8Urls.push(url);
-				}
-			}
-		});
-
-		// Cấu hình trình duyệt giống người dùng thật
-		await page.setUserAgent(
-			'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-		);
-		await page.setViewport({ width: 1920, height: 1080 });
-
-		// Thiết lập các headers
-		await page.setExtraHTTPHeaders({
-			'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
-		});
-
-		// Mở trang web và đợi nó tải xong
-		await page.goto(url, { waitUntil: 'networkidle2', timeout: 60000 });
-
-		// Đợi thêm thời gian để đảm bảo các video player có thể tải
-		await new Promise((resolve) => setTimeout(resolve, 8000));
-
-		// Nếu chưa tìm thấy m3u8, thử tìm trong tất cả các frames
-		if (m3u8Urls.length === 0) {
-			// Tìm trong tất cả các frames
-			const frames = page.frames();
-			for (const frame of frames) {
-				try {
-					const frameContent = await frame.content();
-					const matches = frameContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
-					if (matches) {
-						for (const match of matches) {
-							if (!m3u8Urls.includes(match)) {
-								console.log(`Phát hiện m3u8 URL trong frame: ${match}`);
-								m3u8Urls.push(match);
-							}
-						}
-					}
-				} catch (e) {
-					console.log(`Lỗi khi xử lý frame: ${e.message}`);
-				}
-			}
-		}
-
-		// Nếu vẫn chưa tìm thấy, tìm trong nội dung trang
-		if (m3u8Urls.length === 0) {
-			const pageContent = await page.content();
-			const matches = pageContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
-			if (matches) {
-				for (const match of matches) {
-					if (!m3u8Urls.includes(match)) {
-						console.log(`Phát hiện m3u8 URL trong HTML: ${match}`);
-						m3u8Urls.push(match);
-					}
-				}
-			}
-
-			// Thực thi để tìm thông qua API surrit.com nếu cần
-			const surritInfo: SurritInfo = await page.evaluate(() => {
-				// Tìm UUID
-				const uuidMatches = document.body.innerHTML.match(
-					/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
-				);
-
-				// Tìm mẫu chuỗi video format
-				const videoFormatPattern = document.body.innerHTML.match(
-					/https\|video\|(1280x720|720p)/g
-				);
-
-				return {
-					uuidMatches: uuidMatches || [],
-					videoFormat: videoFormatPattern
-						? videoFormatPattern[0].split('|')[2]
-						: '720p',
-				};
+		// Thử sử dụng puppeteer với cấu hình tối ưu
+		try {
+			browser = await puppeteer.launch({
+				headless: true, // Sửa 'new' thành true để tương thích với phiên bản cũ
+				executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+				args: [
+					'--no-sandbox',
+					'--disable-setuid-sandbox',
+					'--disable-dev-shm-usage',
+					'--disable-gpu',
+					'--disable-features=IsolateOrigins,site-per-process',
+					'--disable-web-security',
+					'--no-zygote', // Giữ lại để tránh vấn đề quyền truy cập
+					'--js-flags=--max-old-space-size=256', // Giảm giới hạn bộ nhớ
+					'--disable-extensions',
+					'--disable-default-apps',
+					'--mute-audio',
+				],
+				defaultViewport: { width: 1280, height: 720 }, // Giảm kích thước viewport
+				timeout: 30000, // Giảm timeout
 			});
 
-			// Nếu tìm thấy UUID, thử tạo URL surrit
-			if (surritInfo.uuidMatches.length > 0) {
-				const uuid = surritInfo.uuidMatches[0];
-				const videoFormat = surritInfo.videoFormat;
-				const surritUrl = `https://surrit.com/${uuid}/${videoFormat}/video.m3u8`;
+			const page = await browser.newPage();
 
-				console.log(`Tạo m3u8 URL từ UUID: ${surritUrl}`);
-				m3u8Urls.push(surritUrl);
+			// Mảng lưu các URLs m3u8 đã phát hiện
+			let m3u8Urls: string[] = [];
+
+			// Lắng nghe tất cả các network requests
+			await page.setRequestInterception(true);
+
+			page.on('request', (request) => {
+				const requestUrl = request.url();
+				if (requestUrl.includes('.m3u8')) {
+					console.log(`Phát hiện m3u8 URL trong request: ${requestUrl}`);
+					if (!m3u8Urls.includes(requestUrl)) {
+						m3u8Urls.push(requestUrl);
+					}
+				}
+				request.continue();
+			});
+
+			page.on('response', async (response) => {
+				const responseUrl = response.url();
+				if (responseUrl.includes('.m3u8')) {
+					console.log(`Phát hiện m3u8 URL trong response: ${responseUrl}`);
+					if (!m3u8Urls.includes(responseUrl)) {
+						m3u8Urls.push(responseUrl);
+					}
+				}
+			});
+
+			// Cấu hình trình duyệt giống người dùng thật
+			await page.setUserAgent(
+				'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+			);
+
+			// Thiết lập các headers
+			await page.setExtraHTTPHeaders({
+				'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7',
+			});
+
+			// Mở trang web và đợi nó tải xong
+			await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+
+			// Đợi thêm thời gian để đảm bảo các video player có thể tải
+			await new Promise((resolve) => setTimeout(resolve, 5000));
+
+			// Nếu chưa tìm thấy m3u8, thử tìm trong tất cả các frames
+			if (m3u8Urls.length === 0) {
+				// Tìm trong tất cả các frames
+				const frames = page.frames();
+				for (const frame of frames) {
+					try {
+						const frameContent = await frame.content();
+						const matches = frameContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
+						if (matches) {
+							for (const match of matches) {
+								if (!m3u8Urls.includes(match)) {
+									console.log(`Phát hiện m3u8 URL trong frame: ${match}`);
+									m3u8Urls.push(match);
+								}
+							}
+						}
+					} catch (e: any) {
+						console.log(`Lỗi khi xử lý frame: ${e.message}`);
+					}
+				}
+			}
+
+			// Nếu vẫn chưa tìm thấy, tìm trong nội dung trang
+			if (m3u8Urls.length === 0) {
+				const pageContent = await page.content();
+				const matches = pageContent.match(/(https?:\/\/[^"'\s]+\.m3u8)/g);
+				if (matches) {
+					for (const match of matches) {
+						if (!m3u8Urls.includes(match)) {
+							console.log(`Phát hiện m3u8 URL trong HTML: ${match}`);
+							m3u8Urls.push(match);
+						}
+					}
+				}
+
+				// Thực thi để tìm thông qua API surrit.com nếu cần
+				const surritInfo: SurritInfo = await page.evaluate(() => {
+					// Tìm UUID
+					const uuidMatches = document.body.innerHTML.match(
+						/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/g
+					);
+
+					// Tìm mẫu chuỗi video format
+					const videoFormatPattern = document.body.innerHTML.match(
+						/https\|video\|(1280x720|720p)/g
+					);
+
+					return {
+						uuidMatches: uuidMatches || [],
+						videoFormat: videoFormatPattern
+							? videoFormatPattern[0].split('|')[2]
+							: '720p',
+					};
+				});
+
+				// Nếu tìm thấy UUID, thử tạo URL surrit
+				if (surritInfo.uuidMatches.length > 0) {
+					const uuid = surritInfo.uuidMatches[0];
+					const videoFormat = surritInfo.videoFormat;
+					const surritUrl = `https://surrit.com/${uuid}/${videoFormat}/video.m3u8`;
+
+					console.log(`Tạo m3u8 URL từ UUID: ${surritUrl}`);
+					m3u8Urls.push(surritUrl);
+				}
+			}
+
+			// Đóng trình duyệt khi xong
+			await browser.close();
+			browser = null;
+
+			// Trả về kết quả nếu tìm thấy
+			if (m3u8Urls.length > 0) {
+				// Ưu tiên URL surrit.com
+				const surritUrl = m3u8Urls.find((url) => url.includes('surrit.com'));
+				if (surritUrl) {
+					return res.json({ m3u8Url: surritUrl });
+				}
+
+				// Nếu không có URL surrit, trả về URL đầu tiên
+				return res.json({ m3u8Url: m3u8Urls[0], allUrls: m3u8Urls });
+			}
+		} catch (puppeteerError) {
+			// Nếu puppeteer gặp lỗi, ghi log và chuyển sang dùng axios
+			const errorMessage =
+				puppeteerError instanceof Error
+					? puppeteerError.message
+					: 'Unknown puppeteer error';
+			console.error(
+				'Puppeteer không khả dụng, chuyển sang axios:',
+				errorMessage
+			);
+			if (browser) {
+				try {
+					await browser.close();
+				} catch (closeError) {
+					const closeErrorMessage =
+						closeError instanceof Error
+							? closeError.message
+							: 'Unknown close error';
+					console.error('Lỗi khi đóng browser:', closeErrorMessage);
+				}
+				browser = null;
 			}
 		}
 
-		// Đóng trình duyệt khi xong
-		await browser.close();
-		browser = null;
-
-		// Trả về kết quả
-		if (m3u8Urls.length > 0) {
-			// Ưu tiên URL surrit.com
-			const surritUrl = m3u8Urls.find((url) => url.includes('surrit.com'));
-			if (surritUrl) {
-				return res.json({ m3u8Url: surritUrl });
-			}
-
-			// Nếu không có URL surrit, trả về URL đầu tiên
-			return res.json({ m3u8Url: m3u8Urls[0], allUrls: m3u8Urls });
-		}
-
-		// Nếu không tìm thấy, thử dùng axios
-		console.log('Không tìm thấy URL m3u8 với Puppeteer, chuyển sang axios');
+		// Nếu không tìm thấy bằng puppeteer hoặc puppeteer gặp lỗi, thử dùng axios
+		console.log(
+			'Không tìm thấy URL m3u8 với Puppeteer hoặc Puppeteer gặp lỗi, chuyển sang axios'
+		);
 		return await getMissavWithAxios(req, res, name);
-	} catch (error: any) {
-		console.error('Lỗi Puppeteer:', error.message);
+	} catch (error) {
+		const errorMessage =
+			error instanceof Error ? error.message : 'Unknown error';
+		console.error('Lỗi tổng quát:', errorMessage);
 
 		if (browser) {
 			try {
 				await browser.close();
-			} catch (e: any) {
-				console.error('Lỗi khi đóng trình duyệt:', e);
+			} catch (e) {
+				const closeErrorMessage =
+					e instanceof Error ? e.message : 'Unknown close error';
+				console.error('Lỗi khi đóng trình duyệt:', closeErrorMessage);
 			}
 		}
 
-		// Nếu Puppeteer gặp lỗi, thử dùng axios với name từ params
+		// Nếu gặp lỗi, thử dùng axios với name từ params
 		try {
 			const name = req.params.name; // Lấy name từ params
 			console.log(`Chuyển sang sử dụng axios cho: ${name}`);
 			return await getMissavWithAxios(req, res, name);
-		} catch (axiosError: any) {
-			console.error('Lỗi khi dùng axios:', axiosError.message);
+		} catch (axiosError) {
+			const axiosErrorMessage =
+				axiosError instanceof Error
+					? axiosError.message
+					: 'Unknown axios error';
+			console.error('Lỗi khi dùng axios:', axiosErrorMessage);
 			res.status(500).json({
 				error: 'Failed to fetch page',
-				message: error.message,
+				message: errorMessage,
 			});
 		}
 	}
 });
 
 // Phương án dự phòng sử dụng axios thay vì puppeteer
-async function getMissavWithAxios(
-	req: express.Request,
-	res: express.Response,
-	nameParam: string
-) {
+async function getMissavWithAxios(req: any, res: any, nameParam: string) {
 	try {
 		let name = nameParam || req.params.name; // Sử dụng tham số hoặc lấy từ req.params
 
@@ -348,7 +381,9 @@ async function getMissavWithAxios(
 			message: 'Không thể tìm thấy URL m3u8 trong nội dung trang',
 		});
 	} catch (error) {
-		console.error('Lỗi axios:', error.message);
+		const errorMessage =
+			error instanceof Error ? error.message : 'Unknown axios error';
+		console.error('Lỗi axios:', errorMessage);
 		throw error;
 	}
 }
