@@ -1114,15 +1114,27 @@ router.get('/ffjav', async (req, res) => {
 			// Mảng chứa các download links
 			let allDownloadLinks: string[] = [];
 
+			// Hàm tạo URL theo ngày tháng - chỉ crawl ngày hôm nay
+			const getDateUrl = (pageNumber: number) => {
+				const today = new Date();
+				const year = today.getFullYear();
+				const month = String(today.getMonth() + 1).padStart(2, '0');
+				const day = String(today.getDate()).padStart(2, '0');
+
+				// Nếu là trang 1, không thêm /page/1
+				if (pageNumber === 1) {
+					return `https://ffjav.com/${year}/${month}/${day}`;
+				} else {
+					return `https://ffjav.com/${year}/${month}/${day}/page/${pageNumber}`;
+				}
+			};
+
 			// Xử lý từng trang - giới hạn số trang để tránh timeout
 			for (let page = 1; page <= pagesToCrawl; page++) {
 				console.log(`\n==== Đang xử lý trang ${page}/${pagesToCrawl} ====`);
 
-				// URL của trang
-				const pageUrl =
-					page === 1
-						? 'https://ffjav.com/jav-torrent'
-						: `https://ffjav.com/jav-torrent/page/${page}`;
+				// URL của trang theo ngày tháng
+				const pageUrl = getDateUrl(page);
 
 				// Tạo trang mới
 				const pageBrowser = await browser.newPage();

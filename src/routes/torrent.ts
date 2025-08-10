@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import moment from 'moment';
 import rp from 'request-promise';
 import { JSDOM } from 'jsdom';
@@ -7,7 +7,7 @@ import got from 'got';
 const router = express.Router();
 
 // Get torrent by date
-router.get('/torrent', async (req, res) => {
+router.get('/torrent', async (req: Request, res: Response) => {
 	try {
 		const date = req.query.date as string;
 		let base = 'https://jav-torrent.org';
@@ -73,7 +73,7 @@ router.get('/torrent', async (req, res) => {
 });
 
 // Get ppv torrent by date
-router.get('/ppv', async (req, res) => {
+router.get('/ppv', async (req: Request, res: Response) => {
 	try {
 		const date = req.query.date as string;
 		let base = 'https://javtorrent.re';
