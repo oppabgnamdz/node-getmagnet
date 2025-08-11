@@ -1310,10 +1310,7 @@ async function processAndSaveLinks(
 ) {
 	// Nếu không tìm thấy links nào
 	if (allDownloadLinks.length === 0) {
-		return res.status(200).json({
-			message: 'Không tìm thấy links nào',
-			links: [],
-		});
+		return res.status(200).json([]);
 	}
 
 	console.log(`\nBắt đầu kiểm tra và thêm vào MongoDB...`);
@@ -1335,10 +1332,7 @@ async function processAndSaveLinks(
 
 	// Nếu không còn links hợp lệ nào
 	if (validLinks.length === 0) {
-		return res.status(200).json({
-			message: 'Không có links hợp lệ để xử lý',
-			links: [],
-		});
+		return res.status(200).json([]);
 	}
 
 	// Lấy tất cả codes để kiểm tra trong DB một lần
