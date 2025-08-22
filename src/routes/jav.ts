@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import moment from 'moment';
 import got from 'got';
 import { JSDOM } from 'jsdom';
@@ -9,7 +9,7 @@ import { renderFile } from '../utils';
 const router = express.Router();
 
 // JAV route
-router.get('/jav', async (req, res) => {
+router.get('/jav', async (req: Request, res: Response) => {
 	try {
 		const date = req.query.date as string;
 		let start = 0;

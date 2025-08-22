@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import cheerio from 'cheerio';
 import axios from 'axios';
 import puppeteer, { Browser } from 'puppeteer';
@@ -7,8 +7,8 @@ import { VideoData, SurritInfo } from '../types';
 const router = express.Router();
 
 // MissAV route - moved from /missav/:name to /:name since we're already mounting under /missav
-router.get('/:name', async (req, res) => {
-	let browser: Browser | null = null;
+router.get('/:name', async (req: Request, res: Response) => {
+	let browser: Browser | undefined;
 	try {
 		let name = req.params.name;
 
@@ -162,8 +162,10 @@ router.get('/:name', async (req, res) => {
 			}
 
 			// Đóng trình duyệt khi xong
-			await browser.close();
-			browser = null;
+			if (browser) {
+				await browser.close();
+				browser = undefined;
+			}
 
 			// Trả về kết quả nếu tìm thấy
 			if (m3u8Urls.length > 0) {
@@ -196,7 +198,7 @@ router.get('/:name', async (req, res) => {
 							: 'Unknown close error';
 					console.error('Lỗi khi đóng browser:', closeErrorMessage);
 				}
-				browser = null;
+				browser = undefined;
 			}
 		}
 

@@ -1,9 +1,9 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 
 const router = express.Router();
 
 // Root route
-router.get('/', async (req, res) => {
+router.get('/', async (req: Request, res: Response) => {
 	try {
 		return res.status(200).json('done');
 	} catch (e) {
@@ -12,7 +12,7 @@ router.get('/', async (req, res) => {
 });
 
 // Crypto JSON route
-router.get(`/crypto-json`, async (req, res) => {
+router.get(`/crypto-json`, async (req: Request, res: Response) => {
 	return res.status(200).json({
 		tokens: [
 			{
@@ -50,7 +50,7 @@ router.get(`/crypto-json`, async (req, res) => {
 });
 
 // Fallback route - catch any unmatched routes
-router.get('*', function (req, res) {
+router.get('*', function (req: Request, res: Response) {
 	return res.status(200).json([]);
 });
 

@@ -1,5 +1,5 @@
-import express from 'express';
-import puppeteer from 'puppeteer';
+import express, { Request, Response } from 'express';
+import puppeteer, { Browser } from 'puppeteer';
 import axios from 'axios';
 import cheerio from 'cheerio';
 import { JSDOM } from 'jsdom';
@@ -18,8 +18,8 @@ import { crawlPages } from './special';
 const router = express.Router();
 
 // Get all magnets from both sites for the last 3 days
-router.get('/get-all', async (req, res) => {
-	let browser = null;
+router.get('/get-all', async (req: Request, res: Response) => {
+	let browser: Browser | null = null;
 	try {
 		// Connect to MongoDB
 		const client = await connectToMongo();
@@ -104,13 +104,17 @@ router.get('/get-all', async (req, res) => {
 		return res.status(200).json(urls);
 	} catch (error) {
 		console.error('Error in /get-all endpoint:', error);
-		return res.status(500).json({ error: error.message });
+		return res
+			.status(500)
+			.json({
+				error: error instanceof Error ? error.message : 'Unknown error',
+			});
 	}
 });
 
 // Get western content
-router.get('/get-western', async (req, res) => {
-	let browser = null;
+router.get('/get-western', async (req: Request, res: Response) => {
+	let browser: Browser | null = null;
 	try {
 		// Kết nối MongoDB
 		const client = await connectToMongo();
@@ -121,7 +125,7 @@ router.get('/get-western', async (req, res) => {
 
 		// Khởi tạo puppeteer để crawl
 		browser = await puppeteer.launch({
-			headless: 'new',
+			headless: true,
 			executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
 			args: [
 				'--no-sandbox',
@@ -159,7 +163,9 @@ router.get('/get-western', async (req, res) => {
 
 		// Lấy 10 href đầu tiên có chứa /v/
 		const hrefs = await page.evaluate(() => {
-			const links = Array.from(document.querySelectorAll('a[href*="/v/"]'));
+			const links = Array.from(
+				document.querySelectorAll('a[href*="/v/"]')
+			) as HTMLAnchorElement[];
 			return links.slice(0, 10).map((a) => a.href);
 		});
 
@@ -200,7 +206,7 @@ router.get('/get-western', async (req, res) => {
 					document.querySelectorAll('a[href^="magnet:"]')
 				);
 				if (magnets.length > 0) {
-					return magnets[0].href;
+					return (magnets[0] as HTMLAnchorElement).href;
 				}
 				return null;
 			});
@@ -242,12 +248,16 @@ router.get('/get-western', async (req, res) => {
 		if (browser) {
 			await browser.close();
 		}
-		return res.status(500).json({ error: error.message });
+		return res
+			.status(500)
+			.json({
+				error: error instanceof Error ? error.message : 'Unknown error',
+			});
 	}
 });
 
 // Get sukebei content
-router.get('/sukebei', async (req, res) => {
+router.get('/sukebei', async (req: Request, res: Response) => {
 	try {
 		// Connect to MongoDB
 		const client = await connectToMongo();
@@ -284,7 +294,7 @@ router.get('/sukebei', async (req, res) => {
 				// Tìm tất cả các thẻ a có href chứa magnet:?xt
 				const magnetLinks = Array.from(
 					document.querySelectorAll('a[href^="magnet:?xt"]')
-				).map((a) => a.href);
+				).map((a) => (a as HTMLAnchorElement).href);
 
 				if (magnetLinks && magnetLinks.length > 0) {
 					console.log(
@@ -321,7 +331,10 @@ router.get('/sukebei', async (req, res) => {
 					}
 				}
 			} catch (pageError) {
-				console.error(`Lỗi khi xử lý trang ${url}:`, pageError.message);
+				console.error(
+					`Lỗi khi xử lý trang ${url}:`,
+					pageError instanceof Error ? pageError.message : 'Unknown error'
+				);
 			}
 
 			// Delay để tránh bị block
@@ -386,7 +399,9 @@ router.get('/sukebei', async (req, res) => {
 					newMagnets.push(magnetUrl);
 				}
 			} catch (dbError) {
-				console.error(`Lỗi khi thêm vào MongoDB: ${dbError.message}`);
+				console.error(
+					`Lỗi khi thêm vào MongoDB: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`
+				);
 			}
 		}
 
@@ -399,14 +414,19 @@ router.get('/sukebei', async (req, res) => {
 	} catch (error) {
 		console.error('Error in /sukebei endpoint:', error);
 		return res.status(500).json({
-			error: error.message,
-			stack: process.env.NODE_ENV === 'production' ? undefined : error.stack,
+			error: error instanceof Error ? error.message : 'Unknown error',
+			stack:
+				process.env.NODE_ENV === 'production'
+					? undefined
+					: error instanceof Error
+						? error.stack
+						: undefined,
 		});
 	}
 });
 
 // Get OneJAV content
-router.get('/onejav', async (req, res) => {
+router.get('/onejav', async (req: Request, res: Response) => {
 	try {
 		// Connect to MongoDB
 		const client = await connectToMongo();
@@ -443,7 +463,7 @@ router.get('/onejav', async (req, res) => {
 				// Tìm tất cả các thẻ a có href chứa /download/
 				const downloadLinks = Array.from(
 					document.querySelectorAll('a[href*="/download/"]')
-				).map((a) => 'https://onejav.com' + a.href);
+				).map((a) => 'https://onejav.com' + (a as HTMLAnchorElement).href);
 
 				if (downloadLinks && downloadLinks.length > 0) {
 					console.log(
@@ -454,7 +474,10 @@ router.get('/onejav', async (req, res) => {
 					console.log(`Không tìm thấy download links nào từ trang ${page}`);
 				}
 			} catch (pageError) {
-				console.error(`Lỗi khi xử lý trang ${url}:`, pageError.message);
+				console.error(
+					`Lỗi khi xử lý trang ${url}:`,
+					pageError instanceof Error ? pageError.message : 'Unknown error'
+				);
 			}
 
 			// Delay để tránh bị block
@@ -511,7 +534,9 @@ router.get('/onejav', async (req, res) => {
 					newLinks.push(link);
 				}
 			} catch (dbError) {
-				console.error(`Lỗi khi thêm vào MongoDB: ${dbError.message}`);
+				console.error(
+					`Lỗi khi thêm vào MongoDB: ${dbError instanceof Error ? dbError.message : 'Unknown error'}`
+				);
 			}
 		}
 
@@ -524,15 +549,20 @@ router.get('/onejav', async (req, res) => {
 	} catch (error) {
 		console.error('Error in /onejav endpoint:', error);
 		return res.status(500).json({
-			error: error.message,
-			stack: process.env.NODE_ENV === 'production' ? undefined : error.stack,
+			error: error instanceof Error ? error.message : 'Unknown error',
+			stack:
+				process.env.NODE_ENV === 'production'
+					? undefined
+					: error instanceof Error
+						? error.stack
+						: undefined,
 		});
 	}
 });
 
 // Get 24AV content
-router.get('/24av/:name', async (req, res) => {
-	let browser = null;
+router.get('/24av/:name', async (req: Request, res: Response) => {
+	let browser: Browser | null = null;
 	try {
 		let name = req.params.name;
 
@@ -589,12 +619,14 @@ router.get('/24av/:name', async (req, res) => {
 		await new Promise((resolve) => setTimeout(resolve, 5000));
 
 		// Lấy URL đúng từ kết quả tìm kiếm
-		const videoData: VideoData = await searchPage.evaluate(() => {
+		const videoData: VideoData | null = await searchPage.evaluate(() => {
 			// Tìm thẻ a đầu tiên có class="name"
 			const nameLink = document.querySelector('a.name');
 			if (nameLink) {
 				// Lấy href của link đầu tiên
 				const href = nameLink.getAttribute('href');
+				if (!href) return null;
+
 				// Lấy base URL
 				const baseUrl = window.location.origin;
 
@@ -647,7 +679,7 @@ router.get('/24av/:name', async (req, res) => {
 		// Lắng nghe tất cả các network requests
 		await page.setRequestInterception(true);
 
-		page.on('request', (request) => {
+		page.on('request', (request: any) => {
 			const url = request.url();
 			if (url.includes('.m3u8')) {
 				console.log(`Phát hiện m3u8 URL trong request: ${url}`);
@@ -658,7 +690,7 @@ router.get('/24av/:name', async (req, res) => {
 			request.continue();
 		});
 
-		page.on('response', async (response) => {
+		page.on('response', async (response: any) => {
 			const url = response.url();
 			if (url.includes('.m3u8')) {
 				console.log(`Phát hiện m3u8 URL trong response: ${url}`);
@@ -702,7 +734,9 @@ router.get('/24av/:name', async (req, res) => {
 						}
 					}
 				} catch (e) {
-					console.log(`Lỗi khi xử lý frame: ${e.message}`);
+					console.log(
+						`Lỗi khi xử lý frame: ${e instanceof Error ? e.message : 'Unknown error'}`
+					);
 				}
 			}
 		}
@@ -723,7 +757,9 @@ router.get('/24av/:name', async (req, res) => {
 			// Thực thi để tìm thông qua các script hoặc API khác nếu cần
 			const videoInfo: VideoInfo = await page.evaluate(() => {
 				// Tìm các m3u8 URLs trong các phần tử video
-				const videoElements = document.querySelectorAll('video source');
+				const videoElements = document.querySelectorAll(
+					'video source'
+				) as NodeListOf<HTMLSourceElement>;
 				const m3u8UrlsFromVideo = Array.from(videoElements)
 					.filter((src) => src.src && src.src.includes('.m3u8'))
 					.map((src) => src.src);
@@ -801,7 +837,10 @@ router.get('/24av/:name', async (req, res) => {
 
 		return await get24avWithAxios(req, res, videoName);
 	} catch (error) {
-		console.error('Lỗi Puppeteer:', error.message);
+		console.error(
+			'Lỗi Puppeteer:',
+			error instanceof Error ? error.message : 'Unknown error'
+		);
 
 		if (browser) {
 			try {
@@ -817,17 +856,24 @@ router.get('/24av/:name', async (req, res) => {
 			console.log(`Chuyển sang sử dụng axios cho: ${name}`);
 			return await get24avWithAxios(req, res, name);
 		} catch (axiosError) {
-			console.error('Lỗi khi dùng axios:', axiosError.message);
+			console.error(
+				'Lỗi khi dùng axios:',
+				axiosError instanceof Error ? axiosError.message : 'Unknown error'
+			);
 			res.status(500).json({
 				error: 'Failed to fetch page',
-				message: error.message,
+				message: error instanceof Error ? error.message : 'Unknown error',
 			});
 		}
 	}
 });
 
 // Phương án dự phòng sử dụng axios thay vì puppeteer cho 24av
-async function get24avWithAxios(req, res, nameParam: string) {
+async function get24avWithAxios(
+	req: Request,
+	res: Response,
+	nameParam: string
+) {
 	try {
 		let name = nameParam || req.params.name; // Sử dụng tham số hoặc lấy từ req.params
 
@@ -976,13 +1022,16 @@ async function get24avWithAxios(req, res, nameParam: string) {
 			message: 'Không thể tìm thấy URL m3u8 trong nội dung trang',
 		});
 	} catch (error) {
-		console.error('Lỗi axios:', error.message);
+		console.error(
+			'Lỗi axios:',
+			error instanceof Error ? error.message : 'Unknown error'
+		);
 		throw error;
 	}
 }
 
 // Route to get new 24av data
-router.get('/release-24av', async (req, res) => {
+router.get('/release-24av', async (req: Request, res: Response) => {
 	try {
 		console.log('Bắt đầu lấy dữ liệu từ 10 trang 24av...');
 
@@ -1028,7 +1077,10 @@ router.get('/release-24av', async (req, res) => {
 				// Đợi một chút giữa các request để tránh bị block
 				await new Promise((resolve) => setTimeout(resolve, 1000));
 			} catch (error) {
-				console.error(`Lỗi khi lấy dữ liệu từ trang ${page}:`, error.message);
+				console.error(
+					`Lỗi khi lấy dữ liệu từ trang ${page}:`,
+					error instanceof Error ? error.message : 'Unknown error'
+				);
 			}
 		}
 
@@ -1071,8 +1123,8 @@ router.get('/release-24av', async (req, res) => {
 });
 
 // Get ffjav content
-router.get('/ffjav', async (req, res) => {
-	let browser = null;
+router.get('/ffjav', async (req: Request, res: Response) => {
+	let browser: Browser | null = null;
 	try {
 		// Kết nối MongoDB
 		const client = await connectToMongo();
@@ -1146,7 +1198,7 @@ router.get('/ffjav', async (req, res) => {
 
 					// Chặn các tài nguyên không cần thiết để tiết kiệm băng thông và CPU
 					await pageBrowser.setRequestInterception(true);
-					pageBrowser.on('request', (request) => {
+					pageBrowser.on('request', (request: any) => {
 						const resourceType = request.resourceType();
 						// Block không cần thiết resources
 						if (
@@ -1185,7 +1237,10 @@ router.get('/ffjav', async (req, res) => {
 					// Thêm vào mảng allDownloadLinks
 					allDownloadLinks = [...allDownloadLinks, ...links];
 				} catch (pageError: any) {
-					console.error(`Lỗi khi xử lý trang ${page}:`, pageError.message);
+					console.error(
+						`Lỗi khi xử lý trang ${page}:`,
+						pageError instanceof Error ? pageError.message : 'Unknown error'
+					);
 				} finally {
 					// Đóng trang và giải phóng bộ nhớ ngay lập tức
 					await pageBrowser.close();
@@ -1292,13 +1347,16 @@ router.get('/ffjav', async (req, res) => {
 		if (browser) {
 			try {
 				// Đảm bảo đóng browser dù có lỗi
-				await browser.close();
+				await (browser as Browser).close();
 			} catch (closeError) {
 				console.error('Failed to close browser:', closeError);
 			}
-			browser = null;
 		}
-		return res.status(500).json({ error: error.message });
+		return res
+			.status(500)
+			.json({
+				error: error instanceof Error ? error.message : 'Unknown error',
+			});
 	}
 });
 
@@ -1347,7 +1405,7 @@ async function processAndSaveLinks(
 		.toArray();
 
 	// Tạo map các code đã tồn tại để kiểm tra nhanh hơn
-	const existingCodes = new Set(existingDocs.map((doc) => doc.url));
+	const existingCodes = new Set(existingDocs.map((doc: any) => doc.url));
 
 	// Lọc ra các links chưa có trong DB
 	const newLinks = validLinks.filter((item) => !existingCodes.has(item.url));

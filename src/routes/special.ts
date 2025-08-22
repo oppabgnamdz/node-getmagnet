@@ -1,4 +1,4 @@
-import express from 'express';
+import express, { Request, Response } from 'express';
 import moment from 'moment';
 import puppeteer from 'puppeteer';
 import { BASE_URL, BASE_URL_P } from '../utils';
@@ -7,16 +7,22 @@ import { MagnetItem } from '../types';
 const router = express.Router();
 
 // Special route for handling specific crawl requests
-router.get('/special', async (req, res) => {
+router.get('/special', async (req: Request, res: Response) => {
 	let browser = null;
 	try {
-		const minusDate = parseInt(req.query.date.split(',')[0]);
+		const dateQuery = req.query.date as string;
+		if (!dateQuery) {
+			return res.status(400).json({ error: 'Missing date parameter' });
+		}
+
+		const dateParams = dateQuery.split(',');
+		const minusDate = parseInt(dateParams[0]);
 		if (isNaN(minusDate)) {
 			return res.status(200).json([]);
 		}
 
-		const side = req.query.date.split(',')[1];
-		const page = req.query.date.split(',')[2];
+		const side = dateParams[1];
+		const page = dateParams[2];
 		const date = moment().subtract(minusDate, 'd').format('YYYY/MM/DD');
 		const formattedDate = moment(date).format('YYYY/MM/DD');
 		const baseUrl = side === 'j' ? BASE_URL : BASE_URL_P;
@@ -74,13 +80,22 @@ router.get('/special', async (req, res) => {
 				console.log(`Tìm thấy ${links.length} links từ trang ${page}`);
 
 				links.forEach((link) => {
-					const code = link.split('/').pop().split('.')[0];
-					linkMap.set(code, link);
+					if (link) {
+						const parts = link.split('/');
+						const filename = parts.pop();
+						if (filename) {
+							const code = filename.split('.')[0];
+							linkMap.set(code, link);
+						}
+					}
 				});
 
 				await puppeteerPage.close();
 			} catch (pageError) {
-				console.error(`Lỗi khi tải trang ${pageUrl}:`, pageError.message);
+				console.error(
+					`Lỗi khi tải trang ${pageUrl}:`,
+					pageError instanceof Error ? pageError.message : 'Unknown error'
+				);
 				await puppeteerPage.close();
 			}
 		} else {
@@ -136,8 +151,13 @@ router.get('/special', async (req, res) => {
 					}
 
 					links.forEach((link) => {
-						const code = link.split('/').pop().split('.')[0];
-						linkMap.set(code, link);
+						if (link) {
+							const parts = link.split('/');
+							const filename = parts.pop();
+							if (!filename) return;
+							const code = filename.split('.')[0];
+							linkMap.set(code, link);
+						}
 					});
 
 					await puppeteerPage.close();
@@ -146,7 +166,10 @@ router.get('/special', async (req, res) => {
 					console.log(`Chờ 1.5 giây trước khi tải trang tiếp theo...`);
 					await new Promise((resolve) => setTimeout(resolve, 1500));
 				} catch (pageError) {
-					console.error(`Lỗi khi tải trang ${pageUrl}:`, pageError.message);
+					console.error(
+						`Lỗi khi tải trang ${pageUrl}:`,
+						pageError instanceof Error ? pageError.message : 'Unknown error'
+					);
 					await puppeteerPage.close();
 					shouldContinue = false;
 				}
@@ -262,8 +285,13 @@ export const crawlPages = async (
 					}
 
 					links.forEach((link) => {
-						const code = link.split('/').pop().split('.')[0];
-						linkMap.set(code, link);
+						if (link) {
+							const parts = link.split('/');
+							const filename = parts.pop();
+							if (!filename) return;
+							const code = filename.split('.')[0];
+							linkMap.set(code, link);
+						}
 					});
 
 					await page.close();
@@ -273,7 +301,10 @@ export const crawlPages = async (
 					console.log(`Chờ 1.5 giây trước khi tải trang tiếp theo...`);
 					await new Promise((resolve) => setTimeout(resolve, 1500));
 				} catch (pageError) {
-					console.error(`Lỗi khi tải trang ${pageUrl}:`, pageError.message);
+					console.error(
+						`Lỗi khi tải trang ${pageUrl}:`,
+						pageError instanceof Error ? pageError.message : 'Unknown error'
+					);
 					await page.close();
 					shouldContinue = false;
 				}
@@ -291,7 +322,9 @@ export const crawlPages = async (
 		);
 
 		return uniqueLinks.map((link) => {
-			const code = link.split('/').pop().split('.')[0];
+			const parts = link.split('/');
+			const filename = parts.pop();
+			const code = filename ? filename.split('.')[0] : 'unknown';
 			return {
 				url: link,
 				code: code,
